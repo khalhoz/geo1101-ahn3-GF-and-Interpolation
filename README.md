@@ -21,6 +21,7 @@ The only working testing environment as of now is for pdal-based ground filterin
 If your pdal installation is in a virtual environment, the correct way to run this in `conda` is to issue these commands:
 * `conda activate myenv`
 * `python [file_path_to_main]`
+
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path in `gf_main.py`.
 
 ### Future work
