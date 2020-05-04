@@ -1,26 +1,26 @@
 # Ground Filtering, Interpolation, Hole Filling and Hydro-flattening
 
 ## In repo so far:
-`gf_processing.py`
-`gf_main.py`
-target_example (folder)
-	`config.json`
-	`fnames.txt`
+-`gf_processing.py`
+-`gf_main.py`
+-target_example (folder)
+	-`config.json`
+	-`fnames.txt`
 
 The only working testing environment as of now is for pdal-based ground filtering via a rudimentary pool-based multiprocessing implementation.
 
 ## PDAL-based ground filtering (test version)
 ### User guide
-1. Open gf_main.py and modify `target_folder` to point to the folder where the LAS files are.
+1. Open `gf_main.py` and modify `target_folder` to point to the folder where the LAS files are.
 2. Copy the example configuration files (`config.json`, `fnames.txt`) to your target folder.
 3. Edit the configuration files.
-	a. Specify the names of the LAS files in `fnames.txt` as shown in the example.
-	b. Modify the configuration in `config.json`. Fine-tune the parametrisation to work well with the given data set.
+	1. Specify the names of the LAS files in `fnames.txt` as shown in the example.
+	2. Modify the configuration in `config.json`. Fine-tune the parametrisation to work well with the given data set.
 4. Run `gf_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly.
 
-If your pdal installation is in a virtual environment, the correct way to run this in conda is to issue these commands:
-`conda activate myenv`
-`python [file_path_to_main]`
+If your pdal installation is in a virtual environment, the correct way to run this in `conda` is to issue these commands:
+-`conda activate myenv`
+-`python [file_path_to_main]`
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path in `gf_main.py`.
 
 ### Future work
