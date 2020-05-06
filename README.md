@@ -18,8 +18,8 @@ The only working testing environment as of now is for pdal-based ground filterin
 	2. Modify the configuration in `config.json`. Fine-tune the parametrisation to work well with the given data set.
 4. Run `gf_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly.
 
-If your pdal installation is in a virtual environment, the correct way to run this in `conda` is to issue these commands:
-* `conda activate myenv`
+If your pdal installation is in a conda virtual environment, the correct way to run this via `conda` is to issue these commands:
+* `conda activate [environment_name]`
 * `python [file_path_to_main]`
 
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path in `gf_main.py`.
@@ -29,4 +29,4 @@ Keep in mind that this program can only fork as many processes as you have cores
 It will ignore extra files. This could be improved via a queue-based framework, but this is merely a proof of concept and queues will probably be developed by the scaling group.
 
 Furthermore, we should probably also experiment around with the `filters.pmf` method that is provided by GDAL. The example parametrisation uses `filters.smrf`. You can start experimenting with this simply by changing the JSON parametrisation, the code does not need to be edited.
-There's further guidance on what's what in `config.json`, inside `gf_processing.py`.
+There's further guidance in `gf_main.py` on what's what in `config.json`.
