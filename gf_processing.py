@@ -57,7 +57,7 @@ def worker(mapped):
 #                       (still need to deduce what slope, window,
 #                       threshold and scalar are for)
 #           EDIT: it appears that "last" has been deprecated? Deleted it from config.
-# [step 5]  extracting the point that were classified as ground        
+# [step 5]  extracting the point that were classified as ground
 
 def start_pool(target_folder, config, fnames):
     """Assembles and executes the worker pool and
@@ -65,7 +65,8 @@ def start_pool(target_folder, config, fnames):
     code merging is not actually required).
     """
     for i in range(len(fnames)):
-        fnames[i] = target_folder + fnames[i][:-1]
+        fnames[i] = fnames[i].strip("\n")
+        fnames[i] = target_folder + fnames[i]
     processno = cpu_count()
     print("Starting multiprocessing pool on the {}".format(
           processno) + " logical cores found in this PC.")
