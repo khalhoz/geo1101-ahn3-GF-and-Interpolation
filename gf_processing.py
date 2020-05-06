@@ -1,9 +1,14 @@
+### MULTIPROCESSING POOL-BASED PDAL GROUND FILTERING CODE ###
+
 import json, os, pdal
 from time import time
 from multiprocessing import Pool, cpu_count
 
-# READ CONFIG
 def initialise(target_folder):
+    """This function reads and returns the configuration JSON file and the
+    list of file names. These are assumed to be called config.json
+    and fnames.txt and to be found in the same folder as the LAS files.
+    """
     with open(target_folder + "config.json", 'r') as file_in:
         config = file_in.read()
     with open(target_folder + "fnames.txt", 'r') as file_in:
@@ -14,73 +19,69 @@ def worker(mapped):
     """Multiprocessing worker function to be used by the
     p.map function to map objects to, and then start
     multiple times in parallel on separate CPU cores.
-    This worker creates and executes the pdal pipeline.
+    In this case the worker function instances ground
+    filter one file each, and return the resulting log,
+    metadata and the point cloud data array itself.
     """
-    print("PID {} starting work on {}".format(
-        os.getpid(), mapped[1]))
-    config, fname = mapped[0], mapped[1]
-    config = ('[\n\t"' + fname + '",\n' + config +
-              '\n\t"' + fname[:-4] + '_out.las"\n]')
+    print("PID {} starting to ground filter file {}".format(
+        os.getpid(), mapped[2]))
+    config, fpath = mapped[0], mapped[1] + mapped[2]
+    config = ('[\n\t"' + fpath + '",\n' + config +
+              '\n\t"' + fpath[:-4] + '_out.las"\n]')
     pipeline = pdal.Pipeline(config)
     start = time()
     pipeline.execute()
     end = time()
-    print("PID {} finished processing file.".format(os.getpid()),
+    print("PID {} finished ground filtering.".format(os.getpid()),
           "Time elapsed: {} sec.".format(round(end - start, 2)))
-    # TODO:
-    # We could write the metadata/logs to disk if we want
-    # to keep a better track of what was done to the data.
-    #metadata = pipeline.metadata
-    #log = pipeline.log  
-    # NOTE:
-    # The data itself I think could be returned on using:
-    #arrays = pipeline.arrays
-
-##############################
-# JSON PIPELINE CONFIG GUIDE #
-##############################
-# !Config based on https://pdal.io/tutorial/ground-filters.html!
-# [step 0]  please note we do not have to add a reprojection step
-#           to the pipeline - ahn3 is in metres by default, which is
-#           what pdal filters need to function properly
-# [step 1]  we fill all classifications with 0 (effectively
-#           resetting any pre-existing classifications)
-# [step 2]  running pdal's noise-elimination algorithm
-# [step 3]  running pdal's outlier eleimination algorithm
-# [step 4]  running the ground filtering algorithm
-#           this uses the algorithm "SMRF" published in Pingel, 2013
-#           (we can use filters.pmf for the implementation of Zhang, 2003)
-#           parameters: last =  true/false: use only last return or not
-#                       ignore = [range]:   which points to let past the
-#                                           classification without modification
-#                       [...]
-#                       (still need to deduce what slope, window,
-#                       threshold and scalar are for)
-#           EDIT: it appears that "last" has been deprecated? Deleted it from config.
-# [step 5]  extracting the point that were classified as ground
+    log = pipeline.log
+    metadata = pipeline.metadata
+    arrays = pipeline.arrays
+    return log, metadata, arrays
 
 def start_pool(target_folder, config, fnames):
-    """Assembles and executes the worker pool and
-    merges the return values (for this test
-    code merging is not actually required).
+    """Assembles and executes the multiprocessing pool and
+    merges the return values (logs, metadata, data arrays).
+    It currently writes the logs and metadata to disk and
+    does not actually do anything with the returned data arrays.
+    As we discussed with Maarten on GitHub, maybe it would be
+    better to pass on the ground filtered data to interpolation
+    intelligently rather than to write all the ground filtered LAS
+    files to disk (as it is done by this script currently).
+    In that case the list array_out would need to be passed on,
+    as it collects all the returned output data arrays of all
+    the ground filtering processes completed as part of the
+    multiprocessing pool.
     """
-    for i in range(len(fnames)):
-        fnames[i] = fnames[i].strip("\n")
-        fnames[i] = target_folder + fnames[i]
     processno = cpu_count()
-    print("Starting multiprocessing pool on the {}".format(
-          processno) + " logical cores found in this PC.")
+    print("\nStarting ground filtering pool of processes on the {}".format(
+        processno) + " logical cores found in this PC.\n")
     if processno < len(fnames):
         print("Warning: more files than processes.\n" +
               "Queue-based multiprocessing not yet implemented, " +
-              "ignoring extra files for now.\n")
+              "ignoring extra files.\n")
     elif len(fnames) == 0:
-        print("No file names were read. Returning.")
-        return
+        print("Error: no file names were read. Returning."); return
     else: processno = len(fnames)
     pre_map = []
-    for i in range(processno): pre_map.append([config, fnames[i]])
+    for i in range(processno):
+        fnames[i] = fnames[i].strip("\n")
+        pre_map.append([config, target_folder, fnames[i]])
     p = Pool(processes = processno)
     out = p.map(worker, pre_map)
+    logs_out, meta_out, arrays_out = [], [], []
+    for returned in out:
+        logs_out.append(returned[0])
+        meta_out.append(returned[1])
+        arrays_out.append(returned[2])
     p.close(); p.join()
-    print("\nAll workers have returned.")
+    print("\nAll workers have returned. Writing logs and metadata.")
+    # The logs appear to be empty. I don't know whether this is
+    # because pdal does not use these logs in its current version,
+    # or because something needs to be configured manually.
+    # See if you can figure this out!
+    for fname, log, meta in zip(fnames, logs_out, meta_out):
+        with open(target_folder + fname[:-4] + "_meta.json", "w") as file_out:
+            file_out.write(meta)
+        with open(target_folder + fname[:-4] + "_log.txt", "w") as file_out:
+            file_out.write(log)
