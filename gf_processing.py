@@ -53,16 +53,16 @@ def start_pool(target_folder, config, fnames):
     the ground filtering processes completed as part of the
     multiprocessing pool.
     """
+    processno = cpu_count()
     print("\nStarting ground filtering pool of processes on the {}".format(
-        cpu_count()) + " logical cores found in this PC.\n")
-    processno = len(fnames)
+        processno) + " logical cores found in this PC.\n")
     if processno < len(fnames):
-        print("Warning: more processes in pool than processor cores.\n" +
-              "Optimally, roughly as many processes as processor " +
-              "cores should be run concurrently. You are starting " +
-              len(fnames) + " processes on " + cpu_count() + " cores.")
+        print("Warning: more files than processes.\n" +
+              "Queue-based multiprocessing not yet implemented, " +
+              "ignoring extra files.\n")
     elif len(fnames) == 0:
         print("Error: no file names were read. Returning."); return
+    else: processno = len(fnames)
     pre_map = []
     for i in range(processno):
         fnames[i] = fnames[i].strip("\n")
