@@ -3,7 +3,7 @@
 from sys import argv
 from gf_processing import initialise, start_pool
 
-"""You need to specify the folder in which you LAS files are as a command line argument (target folder).
+"""You need to specify the folder in which your LAS files are as a command line argument (target folder).
 The folder needs to contain the config JSON in the right format (see example file), with name "config.json".
 A description of what should be in config.json is found after this block of comments.
 The folder also needs to contain a file called "fnames.txt" with the names of the files you want to process,
