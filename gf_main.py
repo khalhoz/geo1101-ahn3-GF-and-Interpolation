@@ -1,18 +1,18 @@
 ### MAIN FILE FOR PDAL TESTING ###
 
+from sys import argv
 from gf_processing import initialise, start_pool
 
-"""You need to specify the folder in which you LAS files are.
+"""You need to specify the folder in which you LAS files are as a command line argument (target folder).
 The folder needs to contain the config JSON in the right format (see example file), with name "config.json".
 A description of what should be in config.json is found after this block of comments.
 The folder also needs to contain a file called "fnames.txt" with the names of the files you want to process,
 as also shown in the example file.
-Use an ABSOLUTE file path to avoid problems (especially when working from virtual environments)!"""
-#####
-target_folder = "C:/Users/geo-geek/example_folder/"
-#####
-"""The output files will be written to the target folder too. They will be tagged with "_out".
-# The returned pdal logs and metadata will also be written there tagged "_log" and "_meta" respectively."""
+Use an ABSOLUTE file path to avoid problems (especially when working from virtual environments)!
+Example command line call (in Anaconda Prompt on Windows):
+"python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/"
+The output files will be written to the target folder too. They will be tagged with "_out".
+The returned pdal logs and metadata will also be written there tagged "_log" and "_meta" respectively."""
 
 ##############################
 # JSON PIPELINE CONFIG GUIDE #
@@ -40,6 +40,10 @@ target_folder = "C:/Users/geo-geek/example_folder/"
 # [step 5]  extracting the point that were classified as ground
 
 def main():
+    if len(argv) == 2: __, target_folder = argv
+    else:
+        print("Incorrect number of arguments passed.")
+        return
     config, fnames = initialise(target_folder)
     start_pool(target_folder, config, fnames)
     print("Success.")
