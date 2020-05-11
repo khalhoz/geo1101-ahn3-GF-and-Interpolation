@@ -62,7 +62,7 @@ def start_pool(target_folder, config, fnames):
               "cores should be run concurrently. You are starting " +
               len(fnames) + " processes on " + cpu_count() + " cores.")
     elif len(fnames) == 0:
-        print("Error: no file names were read. Returning."); return
+        print("Error: No file names were read. Returning."); return
     pre_map = []
     for i in range(processno):
         fnames[i] = fnames[i].strip("\n")
