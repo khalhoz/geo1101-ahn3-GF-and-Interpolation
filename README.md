@@ -16,7 +16,7 @@ The only working testing environment as of now is for pdal-based ground filterin
 2. Edit the configuration files.
 	1. Specify the names of the LAS files in `fnames.txt` as shown in the example.
 	2. Modify the pdal pipeline configuration in `config.json`. Fine-tune the parametrisation to work well with the given data set.
-4. Run `gf_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. It takes one command line argument, which should be the target folder. An example call in the Windows Anaconda Prompt would be: python `C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/`
+4. Run `gf_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. It takes one command line argument, which should be the target folder. An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/`
 
 If your pdal installation is in a conda virtual environment, you need to first activate your virtual environment and _then_ run the program:
 1. `conda activate [environment_name]`
