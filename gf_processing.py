@@ -39,7 +39,7 @@ def worker(mapped):
     arrays = pipeline.arrays
     return log, metadata, arrays
 
-def start_pool(target_folder, config, fnames):
+def start_pool(target_folder):
     """Assembles and executes the multiprocessing pool and
     merges the return values (logs, metadata, data arrays).
     It currently writes the logs and metadata to disk and
@@ -53,16 +53,18 @@ def start_pool(target_folder, config, fnames):
     the ground filtering processes completed as part of the
     multiprocessing pool.
     """
-    print("\nStarting ground filtering pool of processes on the {}".format(
-        cpu_count()) + " logical cores found in this PC.\n")
-    processno = len(fnames)
-    if processno < len(fnames):
+    config, fnames = initialise(target_folder)
+    cores = cpu_count()
+    print("\nStarting interpolation pool of processes on the {}".format(
+        cores) + " logical cores found in this PC.\n")
+    if cores < len(fnames):
         print("Warning: more processes in pool than processor cores.\n" +
               "Optimally, roughly as many processes as processor " +
-              "cores should be run concurrently. You are starting " +
-              len(fnames) + " processes on " + cpu_count() + " cores.")
+              "cores should be run concurrently.\nYou are starting " +
+              str(len(fnames)) + " processes on " + str(cores) + " cores.\n")
     elif len(fnames) == 0:
         print("Error: No file names were read. Returning."); return
+    processno = len(fnames)
     pre_map = []
     for i in range(processno):
         fnames[i] = fnames[i].strip("\n")
@@ -85,3 +87,4 @@ def start_pool(target_folder, config, fnames):
             file_out.write(meta)
         with open(target_folder + fname[:-4] + "_log.txt", "w") as file_out:
             file_out.write(log)
+    print("Success.")

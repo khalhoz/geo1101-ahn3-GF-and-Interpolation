@@ -40,13 +40,8 @@ The returned pdal logs and metadata will also be written there tagged "_log" and
 # [step 5]  extracting the point that were classified as ground
 
 def main():
-    if len(argv) == 2: __, target_folder = argv
-    else:
-        print("Error: Incorrect number of arguments passed. Returning.")
-        return
-    config, fnames = initialise(target_folder)
-    start_pool(target_folder, config, fnames)
-    print("Success.")
+    if len(argv) == 2: start_pool(*argv[1:])
+    else: print("Error: Incorrect number of arguments passed. Returning.")
 
 if __name__ == '__main__':
     main()
