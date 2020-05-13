@@ -46,9 +46,13 @@ So, the full workflow is:
 	6. IDW interpolation power in metres (the exponent of the inverse weighting) _(optional)_
 	7. IDW interpolation fallback window size (more on this below) _(optional)_
 
-An example call in the Windows Anaconda Prompt would be:  `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ startin-TINlinear ASC`
+An example call in the Windows Anaconda Prompt would be:
 
-Or for the IDW algorithm with radius and power values it would be  `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ PDAL-IDW 10 2 GeoTIFF`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ startin-TINlinear ASC`
+
+Or for the IDW algorithm with radius and power values it would be
+
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ PDAL-IDW 10 2 GeoTIFF`
 
 ### A word of caution
 If you are using an Anaconda virtual environment for PDAL/CGAL, you should first activate the environment in Anaconda prompt and _then_ run the relevant script
