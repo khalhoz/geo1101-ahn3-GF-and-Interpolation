@@ -1,7 +1,7 @@
 ### MAIN FILE FOR PDAL TESTING ###
 
 from sys import argv
-from gf_processing import initialise, start_pool
+from gf_processing import start_pool
 
 """You need to specify the folder in which your LAS files are as a command line argument (target folder).
 The folder needs to contain the config JSON in the right format (see example file), with name "config.json".
@@ -40,7 +40,7 @@ The returned pdal logs and metadata will also be written there tagged "_log" and
 # [step 5]  extracting the point that were classified as ground
 
 def main():
-    if len(argv) == 2: start_pool(*argv[1:])
+    if 2 <= len(argv) <= 7: start_pool(*argv[1:])
     else: print("Error: Incorrect number of arguments passed. Returning.")
 
 if __name__ == '__main__':

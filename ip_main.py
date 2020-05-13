@@ -8,20 +8,19 @@ The arguments should be specified in this order:
         - startin-TINlinear
         - startin-Laplace
         - CGAL-NN
+        - PDAL-IDW
     - output format, one of:
         - ASC
         - GeoTIFF
-    - EPSG override
-        - If you wish, you can manually specify an EPSG code for GeoTIFF
-          outputs here, the default is 28992 (Amersfoort).
+    - IDW radius (optional)
+    - IDW power (optional)
+    - IDW fallback kernel width (optional)
 Output files will be dumped in the target folder tagged with the
 name of the interpolation method that was used.
 
-IDW support is not yet implemented. GDAL is very unsuitable for handling
-input in the form of Python/Numpy data structures, so I will need to
-come up with an alternative workflow that writes the classified points
-to disk in an OGR format rather than LAS, which GDAL can then read,
-interpolate and write to disk as GeoTIFF.
+Quadrant-based and ellipsodial IDW is not yet implemented,
+but radial IDW works well. More info about this in the GitHub readme.
+The PDAL-IDW algorithm cannot export in ASC.
 """
 
 from sys import argv

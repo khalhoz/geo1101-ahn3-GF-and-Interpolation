@@ -1,42 +1,17 @@
 ### MULTIPROCESSING POOL-BASED INTERPOLATION CODE ###
 
-import os, math
+import os
 from time import time
 from multiprocessing import Pool, cpu_count
 import numpy as np
-from laspy.file import File
-import rasterio
-from rasterio.transform import Affine
-import startin
-from CGAL.CGAL_Kernel import Point_2, Weighted_point_2
-from CGAL.CGAL_Triangulation_2 import Regular_triangulation_2
-from CGAL.CGAL_Interpolation import regular_neighbor_coordinates_2
+from las_prepare import prepare
 
-def prepare(size, fpath):
-    """Takes the filepath to the input (ground filtered) LAS file, and the
-    desired output raster resolution. Reads LAS and outputs the ground points
-    as a numpy array. Also establishes some basic raster parameters:
-        - the extents
-        - the resolution in coordinates
-        - the coordinate location of the relative origin (bottom left)
-    """
-    in_file = File(fpath, mode = "r")
-    in_np = np.vstack((in_file.raw_classification,
-                       in_file.x, in_file.y, in_file.z)).transpose()
-    in_np = in_np[in_np[:,0] == 2].copy()[:,1:]
-    extents = [[min(in_np[:,0]), max(in_np[:,0])],
-               [min(in_np[:,1]), max(in_np[:,1])]]
-    res = [math.ceil((extents[0][1] - extents[0][0]) / size),
-           math.ceil((extents[1][1] - extents[1][0]) / size)]
-    origin = [np.mean(extents[0]) - (size / 2) * res[0],
-              np.mean(extents[1]) - (size / 2) * res[1]]
-    return in_np, res, origin
-
-def startin_execute(pts, res, origin, size, method):
-    """Takes the grid parameters and the ground points. Simultaneously
-    interpolates using the TIN-linear and the Laplace methods. Uses a
+def execute_startin(pts, res, origin, size, method):
+    """Takes the grid parameters and the ground points. Interpolates
+    either using the TIN-linear or the Laplace method. Uses a
     -9999 no-data value. Fully based on the startin package.
     """
+    import startin
     tin = startin.DT(); tin.insert(pts)
     ras = np.zeros(res)
     if method == 'startin-TINlinear':
@@ -55,7 +30,7 @@ def startin_execute(pts, res, origin, size, method):
         xi += 1
     return ras
 
-def cgal_execute(pts, res, origin, size):
+def execute_cgal(pts, res, origin, size):
     """Performs CGAL-NN on the input points. Uses something
     that is called regular neighbour coordinates in CGAL, which
     really just means a 2D triangulation with weights.
@@ -64,6 +39,9 @@ def cgal_execute(pts, res, origin, size):
     I set it to zero for now, but we should find out what it is
     during the testing phase.
     """
+    from CGAL.CGAL_Kernel import Point_2, Weighted_point_2
+    from CGAL.CGAL_Triangulation_2 import Regular_triangulation_2
+    from CGAL.CGAL_Interpolation import regular_neighbor_coordinates_2
     cpts = list(map(lambda x: Point_2(*x), pts[:,:2].tolist()))
     pairs = [(p, z) for p, z in zip(cpts, pts[:,2].tolist())]
     wpts = map(lambda x: Weighted_point_2(*x), pairs)
@@ -82,6 +60,27 @@ def cgal_execute(pts, res, origin, size):
         xi += 1
     return ras
 
+def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
+    """Sets up a PDAL pipeline that reads a ground filtered LAS
+    file, and writes it via GDAL. The GDAL writer has interpolation
+    options, exposing the radius, power and a fallback kernel width
+    to be configured. More about these in the readme on GitHub.
+    """
+    import pdal
+    if fmt == "ASC":
+        print("ASC format for PDAL-IDW is not supported.")
+    if fmt == "GeoTIFF":
+        config = ('[\n\t"' + fpath + '",\n' +
+                  '\n\t{\n\t\t"output_type": "idw"' +
+                  ',\n\t\t"resolution": ' + str(size) +
+                  ',\n\t\t"radius": ' + str(rad) +
+                  ',\n\t\t"power": ' + str(pwr) +
+                  ',\n\t\t"window_size": ' + str(wnd) +
+                  ',\n\t\t"filename": "' + fpath[:-4] +
+                  '_IDW.tif"\n\t}\n]')      
+    pipeline = pdal.Pipeline(config)
+    pipeline.execute()
+    
 def write_asc(res, origin, size, raster, fpath):
     """Writes the interpolated TIN-linear and Laplace rasters
     to disk using the ASC format. The header is based on the
@@ -99,12 +98,14 @@ def write_asc(res, origin, size, raster, fpath):
                 file_out.write(str(raster[xi, yi]) + " ")
             file_out.write("\n")
 
-def write_geotiff(raster, origin, fpath, epsg):
+def write_geotiff(raster, origin, fpath):
     """Writes the interpolated TIN-linear and Laplace rasters
     to disk using the GeoTIFF format. The header is based on
     the raster array and a manual definition of the coordinate
     system and an identity affine transform.
     """
+    import rasterio
+    from rasterio.transform import Affine
     transform = Affine.translation(origin[0], origin[1])
     with rasterio.Env():
         with rasterio.open(fpath, 'w', driver = 'GTiff',
@@ -112,7 +113,7 @@ def write_geotiff(raster, origin, fpath, epsg):
                            width = raster.shape[1],
                            count = 1,
                            dtype = raster.dtype,
-                           crs='EPSG:' + epsg,
+                           crs='EPSG:28992',
                            transform = transform
                            ) as out_file:
             out_file.write(raster, 1)
@@ -128,36 +129,42 @@ def ip_worker(mapped):
     """
     print("PID {} starting to interpolate file {}".format(
         os.getpid(), mapped[2]))
-    size, fpath = mapped[0], (mapped[1] + mapped[2])[:-4] + '_out.las' 
+    size, fpath = mapped[0], (mapped[1] + mapped[2])[:-4] + '_gf.las' 
     start = time()
+    if mapped[3] == 'PDAL-IDW':
+        execute_pdal(mapped[1], fpath, size, mapped[4],
+                     mapped[5], mapped[6], mapped[7])
+        end = time()
+        print("PID {} finished interpolation and export.".format(os.getpid()),
+          "Time elapsed: {} sec.".format(round(end - start, 2)))
+        return
     gnd_coords, res, origin = prepare(size, fpath)
-    if mapped[4] == 'startin-TINlinear' or mapped[4] == 'startin-Laplace':
-        ras = startin_execute(gnd_coords, res, origin, size, mapped[4])
-    elif mapped[4] == 'CGAL-NN':
-        ras = cgal_execute(gnd_coords, res, origin, size)
-    elif mapped[4] == 'GDAL-IDW-radial':
-        pass
+    if mapped[3] == 'startin-TINlinear' or mapped[4] == 'startin-Laplace':
+        ras = execute_startin(gnd_coords, res, origin, size, mapped[4])
+    elif mapped[3] == 'CGAL-NN':
+        ras = execute_cgal(gnd_coords, res, origin, size)
     end = time()
     print("PID {} finished interpolation.".format(os.getpid()),
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
     start = time()
-    if mapped[4] == 'startin-TINlinear' and mapped[5] == 'ASC':
+    if mapped[3] == 'startin-TINlinear' and mapped[4] == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_TINlinear.asc')
-    if mapped[4] == 'startin-Laplace' and mapped[5] == 'ASC':
+    if mapped[3] == 'startin-Laplace' and mapped[4] == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_Laplace.asc')
-    if mapped[4] == 'startin-TINlinear' and mapped[5] == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_TINlinear.tif', mapped[3])
-    if mapped[4] == 'startin-Laplace' and mapped[5] == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_Laplace.tif', mapped[3])
-    if mapped[4] == 'CGAL-NN' and mapped[5] == 'ASC':
+    if mapped[3] == 'CGAL-NN' and mapped[4] == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_NN.asc')
-    if mapped[4] == 'CGAL-NN' and mapped[5] == 'GeoTIFF':
+    if mapped[3] == 'startin-TINlinear' and mapped[4] == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_TINlinear.tif', mapped[3])
+    if mapped[3] == 'startin-Laplace' and mapped[4] == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_Laplace.tif', mapped[3])
+    if mapped[3] == 'CGAL-NN' and mapped[4] == 'GeoTIFF':
         write_geotiff(ras, origin, fpath[:-4] + '_NN.tif', mapped[3])
     end = time()
     print("PID {} finished exporting.".format(os.getpid()),
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
     
-def start_pool(target_folder, size, method, fmt, epsg = '28992'):
+def start_pool(target_folder, size, method, fmt,
+               rad = 10, pwr = 2, wnd = 0):
     """Assembles and executes the multiprocessing pool.
     The interpolation variants/export formats are handled
     by the worker function (ip_worker(mapped)).
@@ -178,9 +185,9 @@ def start_pool(target_folder, size, method, fmt, epsg = '28992'):
     pre_map = []
     for i in range(processno):
         pre_map.append([float(size), target_folder, fnames[i].strip("\n"),
-                        epsg, method, fmt])
+                        method, fmt, rad, pwr, wnd])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
     p.close(); p.join()
     print("\nAll workers have returned.")
-    print("\nSuccess.")
+    print("Success.")

@@ -1,24 +1,22 @@
 # Ground Filtering, Interpolation, Hole Filling and Hydro-flattening Testing Environment
 
+**This is the Python repo of the ground filtering/interpolation team of the AHN3 GEO1101 (synthesis project) group of 2020.**
+
 ## In repo so far:
+* `las_prepare.py` _(factored out from `gf_processing.py`)_
 * `gf_main.py`
 * `gf_processing.py`
 * `ip_main.py`
 * `ip_processing.py`
+* `gdal_attempt.py`
 * target_example (folder)
 	* `fnames.txt`
 	* `config.json` _(which you can push updates to)_
 	* `config_default.json` _(which should not be modified, it is there for reference)_
 
-The testing environment so far includes multiprocessing pool-based implementations of ground filtering via PDAL, TIN-linear and Laplace interpolation via startin, and 
-natural neighbour (NN) interpolation via CGAL. I am currently working on integrating a GDAL-based IDW workflow, but it is proving to be more difficult than anticipated.
-
-**Note:** If you are using an Anaconda virtual environment for PDAL/CGAL, you should first active the environment in Anaconda prompt and _then_ run the relevant script
-from the same prompt. So, for example:
-1. `conda activate [environment_name]`
-2. `python [file_path_to_main] [argument_1] [argument_2] [...]`
-
-Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path.
+The testing environment so far includes multiprocessing pool-based implementations of ground filtering via PDAL, TIN-linear and Laplace interpolation via startin, 
+natural neighbour (NN) interpolation via CGAL and radial IDW via GDAL/PDAL. I am currently working on integrating an ellipsoidal/quadrant-based IDW solution, but it is
+proving much more difficult than anticipated (more about this at the end of the readme).
 
 ## PDAL-based ground filtering user guide
 1. Copy the example configuration files (`config.json`, `fnames.txt`) to your target folder (in which the LAS files are located).
@@ -40,21 +38,44 @@ So, the full workflow is:
         * startin-TINlinear
         * startin-Laplace
         * CGAL-NN
+		* PDAL-IDW
     4. output format, one of:
         * ASC
         * GeoTIFF
-    5. EPSG override _(optional)_
-        * If you wish, you can manually specify an EPSG code for GeoTIFF outputs here, the default is 28992 (Amersfoort).
+    5. IDW interpolation radius in metres. _(optional)_
+	6. IDW interpolation power in metres (the exponent of the inverse weighting). _(optional)_
+	7. IDW interpolation fallback window size (more on this below). _(optional)_
 
 An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ startin-TINlinear ASC`
-The workflow for GDAL-IDW will be slightly different, more info on that later.
+
+Or for the IDW algorithm with radius and power values it would be `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ PDAL-IDW 10 2 GeoTIFF`
+
+### A word of caution
+If you are using an Anaconda virtual environment for PDAL/CGAL, you should first activate the environment in Anaconda prompt and _then_ run the relevant script
+from the same prompt. So, for example:
+1. `conda activate [environment_name]`
+2. `python [file_path_to_main] [argument_1] [argument_2] [...]`
+
+Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path.
+
+**Note:** ASC export is not currently supported for the PDAL-IDW algorithm.
 
 ### Future work
-The current version of this implementation runs as many processes in parallel, as there are input files, hence using all processor cores. This multiprocessing implementation is based
-on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at.
+The current version of this implementation runs as many processes in parallel as there are input files, hence using all processor cores when there are at least as many files as there are cores in
+the given system. This multiprocessing implementation is based on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at.
 
-Furthermore, we should probably also experiment around with the `filters.pmf` method that is provided by GDAL. The example parametrisation uses `filters.smrf`. You can start experimenting with this simply by changing the JSON parametrisation, the code does not need to be edited.
+We should probably also experiment around with the `filters.pmf` method that is provided by PDAL. The example parametrisation uses `filters.smrf`. You can start experimenting with this simply by changing the JSON parametrisation, the code does not need to be edited.
 There's further guidance in `gf_main.py` on what's what in `config.json`.
 
-The GDAL-IDW workflow is currently being worked on, as indicated above. Also relevant to the interpolation is that CGAL-NN takes weights for the query points. I am not sure
-conceptually why this is needed and what it is for. It currently uses a weight of zero for each query point, but we should look into what this is for while testing.
+The PDAL-IDW workflow is actually built on top of GDAL, but since GDAL does not play well with Python data structures, I used the interface that is provided within PDAL's pipeline framework to implement it.
+No part of the program currently uses the Python bindings of GDAL directly, but we might need to eventually start working with it. The ellipsoidal IDW features cannot be accessed through PDAL's interface for GDAL,
+hence it cannot be used (hence PDAL-IDW only accepts one radius). There is a neat extra feature in the PDAL interface though, it allows a fallback method to be used. If you specify a value for an interpolation window
+(the last command line argument above), wherever radial IDW fails, the program will look for values within a square kernel of pixels around the pixel that is being interpolated (presumably after the first round of
+true IDW interpolation). For example, if you provide a value of 10 for this argument, it will look for values in a 10x10 square kernel around the pixel for values, weighting them based on their distance from the
+pixel that is being interpolated. This can theoretically make the result more or less continuous (like the Voronoi and TIN-based methods).
+
+I actually managed to implement an program that uses the GDAL interface directly (see the file `GDAL_attempt.py`) which is ready to read OGR vector files (for example ESRI shapefiles) and interpolate them
+using GDAL's Python bindings. This would give access to the full IDW functionality of GDAL, but there is a problem: I implemented this because I though we could simply set the PDAL ground filtering implementation
+to export into OGR files rather than LAS files and then simply use those as input for GDAL (GDAL is not compatible with LAS files). However, it turns out that there is a bug in the OGR writer of PDAL. It crashes
+Python randomly while exporting. I can run the same code 10 times in a loop and 3-4 out of 10 attempts it will export correctly, but in the other cases it will crash. Unfortunately this makes it useless to us.
+I have been trying to get this to work in Python 3.8, which could potentially be the source of the issues. I'll try to experiment with other combinations of Python and PDAL versions in the future.

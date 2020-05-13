@@ -1,8 +1,9 @@
 ### MULTIPROCESSING POOL-BASED PDAL GROUND FILTERING CODE ###
 
-import json, os, pdal
+import os
 from time import time
 from multiprocessing import Pool, cpu_count
+import pdal
 
 def initialise(target_folder):
     """This function reads and returns the configuration JSON file and the
