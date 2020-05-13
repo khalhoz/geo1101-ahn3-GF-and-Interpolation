@@ -42,13 +42,13 @@ So, the full workflow is:
     4. output format, one of:
         * ASC
         * GeoTIFF
-    5. IDW interpolation radius in metres. _(optional)_
-	6. IDW interpolation power in metres (the exponent of the inverse weighting). _(optional)_
-	7. IDW interpolation fallback window size (more on this below). _(optional)_
+    5. IDW interpolation radius in metres _(optional)_
+	6. IDW interpolation power in metres (the exponent of the inverse weighting) _(optional)_
+	7. IDW interpolation fallback window size (more on this below) _(optional)_
 
-An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ startin-TINlinear ASC`
+An example call in the Windows Anaconda Prompt would be:  `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ startin-TINlinear ASC`
 
-Or for the IDW algorithm with radius and power values it would be `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ PDAL-IDW 10 2 GeoTIFF`
+Or for the IDW algorithm with radius and power values it would be  `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ PDAL-IDW 10 2 GeoTIFF`
 
 ### A word of caution
 If you are using an Anaconda virtual environment for PDAL/CGAL, you should first activate the environment in Anaconda prompt and _then_ run the relevant script
