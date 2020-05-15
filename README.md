@@ -21,9 +21,9 @@ ellipsodial IDW solution in the future, but it is proving much more difficult th
 
 **NEW STUFF**
 
-*Added the IDWquad method
-*Fixed lots of bugs
-*The orientation of the exported rasters should not be correct, not randomly rotated
+* Added the IDWquad method
+* Fixed lots of bugs
+* The orientation of the exported rasters should not be correct, not randomly rotated
 
 Read the new section _"More about the IDW algorithms"_ below for more info about the IDW algorithms.
 
@@ -88,7 +88,8 @@ from the same prompt. So, for example:
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path.
 
 **Note:** ASC export is not currently supported for the PDAL-IDW algorithm.
-**Another note:** You are advised to fine-tune the IDWradial parametrisation with performance in mind. Otherwise it might take _veeeeeery long_ to finish.
+
+**Another note:** You are advised to configure the IDWradial parametrisation **with performance in mind** when first getting started with IDWquad. Otherwise it might take _veeeeeery long_ to finish.
 
 ### More about the IDW algorithms
 
@@ -106,15 +107,15 @@ overlay it with a raster of the desired dimensions. For each pixel, it iterative
 can either based its KD-tree queries on k-nearest neighbours to find, or a query radius to search within.
 I'll explain how it works by giving some more detail about the parameters, listing them in the same order as in the list of arguments above.
 
-* Starting interpolation radius/number of neighbours _k_ to query: The starting value for the radius or number of neighbours to query. This is the value that will be incremented until enough points per quadrant can be found to interpolate a value for the pixel.
-* Interpolation power: this is self-explanatory, it is the power that is used _if_ IDW interpolation can take place based on the number of neighbours per quadrant that were found.
-* Minimum number of points to find per quadrant: the minimum number of neighbours to find in _each_ quadrant to interpolate a value for the pixel. E.g. if it is set to one, the algorithm will be satisfied by finding only one neighbour per quadrant. If you set it to a higher value, it will increase the radius/number of neighbours to find until it finds that many neighbours per quadrant (or reaches the maximum number of iterations).
-* Increment value: the algorithm will increase the radius/number of closest neighbours queried by this amount in each iteration until there are enough neighbours per quadrant to interpolate.
-* Method: as already explained, you can either specify "radial" to make the algorithm iteratively expand its search radius, or "k-nearest" to iteratively increase the number of nearest neighbours to query.
-* Tolerance value _eps_: this is very important in terms of performance. As we discussed with Ravi on Discord, the best way to increase performance here is to use _approximate_ KD-tree queries rather than exact queries. Fine tune this parameter to drastically improve performance. This does not affect continuity, it does however affect quality. You can find more info about this on the following pages:
+* **Starting interpolation radius/number of neighbours _k_ to query:** The starting value for the radius or number of neighbours to query. This is the value that will be incremented until enough points per quadrant can be found to interpolate a value for the pixel.
+* **Interpolation power:** this is self-explanatory, it is the power that is used _if_ IDW interpolation can take place based on the number of neighbours per quadrant that were found.
+* **Minimum number of points to find per quadrant:** the minimum number of neighbours to find in _each_ quadrant to interpolate a value for the pixel. E.g. if it is set to one, the algorithm will be satisfied by finding only one neighbour per quadrant. If you set it to a higher value, it will increase the radius/number of neighbours to find until it finds that many neighbours per quadrant (or reaches the maximum number of iterations).
+* **Increment value:** the algorithm will increase the radius/number of closest neighbours queried by this amount in each iteration until there are enough neighbours per quadrant to interpolate.
+* **Method:** as already explained, you can either specify "radial" to make the algorithm iteratively expand its search radius, or "k-nearest" to iteratively increase the number of nearest neighbours to query.
+* **Tolerance value _eps_:** this is very important in terms of performance. As we discussed with Ravi on Discord, the best way to increase performance here is to use _approximate_ KD-tree queries rather than exact queries. Fine tune this parameter to drastically improve performance. This does not affect continuity, it does however affect quality. You can find more info about this on the following pages:
 	* If you use radial queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query_ball_point.html#scipy.spatial.cKDTree.query_ball_point
 	* If you use k-nearest queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query.html#scipy.spatial.cKDTree.query
-* Iteration limit: you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
+* **Iteration limit:** you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
 
 ### Future work
 
