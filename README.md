@@ -93,7 +93,7 @@ Relative file paths won't work in virtual environments, so make sure you specify
 
 ### More about the IDW algorithms
 
-## PDAL-IDW
+#### PDAL-IDW
 The PDAL-IDW workflow is actually built on top of GDAL, but since GDAL does not play well with Python data structures, I used the interface that is provided within PDAL's pipeline framework to implement it.
 No part of the program currently uses the Python bindings of GDAL directly, but we might need to eventually start working with it. The ellipsoidal IDW features cannot be accessed through PDAL's interface for GDAL,
 hence they cannot be used here (hence PDAL-IDW only accepts one radius). There is a neat extra feature in the PDAL interface though, it allows a fallback method to be used. If you specify a value for an interpolation window
@@ -101,7 +101,7 @@ hence they cannot be used here (hence PDAL-IDW only accepts one radius). There i
 true IDW interpolation). For example, if you provide a value of 10 for this argument, it will look for values in a 10x10 square kernel around the pixel for values, weighting them based on their distance from the
 pixel that is being interpolated. This can theoretically make the result more or less continuous (a bit more like the Voronoi and TIN-based methods).
 
-## IDWquad
+#### IDWquad
 This is a quadrant-based IDW implementation that is not built on top of third-party software (apart from scipy, from which cKDTree is used). It builds a KD-tree representation of the points of the input tile and
 overlay it with a raster of the desired dimensions. For each pixel, it iteratively queries more and more points until it has enough points **per quadrant** to consider an IDW interpolation reliable. The algorithm
 can either based its KD-tree queries on k-nearest neighbours to find, or a query radius to search within.
