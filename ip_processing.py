@@ -219,7 +219,7 @@ def ip_worker(mp):
     
 def start_pool(target_folder, size = 1, method = "startin-Laplace",
                fmt = "GeoTIFF", idw0 = 5, idw1 = 2, idw2 = 0,
-               idw3 = 2, idw4 = 0.2, idw5 = 3, idw6 = "radial"):
+               idw3 = 2, idw4 = "radial", idw5 = 0.2, idw6 = 3):
     """Assembles and executes the multiprocessing pool.
     The interpolation variants/export formats are handled
     by the worker function (ip_worker(mapped)).
@@ -241,7 +241,7 @@ def start_pool(target_folder, size = 1, method = "startin-Laplace",
     for i in range(processno):
         pre_map.append([float(size), target_folder, fnames[i].strip("\n"),
                         method, fmt, float(idw0), float(idw1), float(idw2),
-                        float(idw3), float(idw4), float(idw5), float(idw6)])
+                        float(idw3), idw4, float(idw5), float(idw6)])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
     p.close(); p.join()

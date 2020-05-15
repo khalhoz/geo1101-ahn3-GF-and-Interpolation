@@ -28,7 +28,7 @@ def worker(mapped):
         os.getpid(), mapped[2]))
     config, fpath = mapped[0], mapped[1] + mapped[2]
     config = ('[\n\t"' + fpath + '",\n' + config +
-              '\n\t"' + fpath[:-4] + '_out.las"\n]')
+              '\n\t"' + fpath[:-4] + '_gf.las"\n]')
     pipeline = pdal.Pipeline(config)
     start = time()
     pipeline.execute()
@@ -49,7 +49,7 @@ def start_pool(target_folder):
     better to pass on the ground filtered data to interpolation
     intelligently rather than to write all the ground filtered LAS
     files to disk (as it is done by this script currently).
-    In that case the list array_out would need to be passed on,
+    In that case the list array_gf would need to be passed on,
     as it collects all the returned output data arrays of all
     the ground filtering processes completed as part of the
     multiprocessing pool.
@@ -72,18 +72,18 @@ def start_pool(target_folder):
         pre_map.append([config, target_folder, fnames[i]])
     p = Pool(processes = processno)
     out = p.map(worker, pre_map)
-    logs_out, meta_out, arrays_out = [], [], []
+    logs_gf, meta_gf, arrays_gf = [], [], []
     for returned in out:
-        logs_out.append(returned[0])
-        meta_out.append(returned[1])
-        arrays_out.append(returned[2])
+        logs_gf.append(returned[0])
+        meta_gf.append(returned[1])
+        arrays_gf.append(returned[2])
     p.close(); p.join()
     print("\nAll workers have returned. Writing logs and metadata.")
     # The logs appear to be empty. I don't know whether this is
     # because pdal does not use these logs in its current version,
     # or because something needs to be configured manually.
     # See if you can figure this out!
-    for fname, log, meta in zip(fnames, logs_out, meta_out):
+    for fname, log, meta in zip(fnames, logs_gf, meta_gf):
         with open(target_folder + fname[:-4] + "_meta.json", "w") as file_out:
             file_out.write(meta)
         with open(target_folder + fname[:-4] + "_log.txt", "w") as file_out:
