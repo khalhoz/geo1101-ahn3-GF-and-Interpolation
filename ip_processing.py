@@ -241,7 +241,7 @@ def start_pool(target_folder, size = 1, method = "startin-Laplace",
     for i in range(processno):
         pre_map.append([float(size), target_folder, fnames[i].strip("\n"),
                         method, fmt, float(idw0), float(idw1), float(idw2),
-                        float(idw3), float(idw4), float(idw5), float(idw6)])
+                        float(idw3), float(idw4), float(idw5), idw6])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
     p.close(); p.join()
