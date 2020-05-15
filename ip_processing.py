@@ -13,21 +13,21 @@ def execute_startin(pts, res, origin, size, method):
     """
     import startin
     tin = startin.DT(); tin.insert(pts)
-    ras = np.zeros(res)
+    ras = np.zeros([res[1], res[0]])
     if method == 'startin-TINlinear':
         def interpolant(x, y): return tin.interpolate_tin_linear(x, y)
     elif method == 'startin-Laplace':
         def interpolant(x, y): return tin.interpolate_laplace(x, y)
-    xi = 0
-    for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-        yi = 0
-        for y in np.arange(origin[1] + res[1] * size, origin[1], -size):
+    yi = 0
+    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        xi = 0
+        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
             tri = tin.locate(x, y)
             if tri != [] and 0 not in tri:
-                ras[xi, yi] = interpolant(x, y)
-            else: ras[xi, yi] = -9999
-            yi += 1
-        xi += 1
+                ras[yi, xi] = interpolant(x, y)
+            else: ras[yi, xi] = -9999
+            xi += 1
+        yi += 1
     return ras
 
 def execute_cgal(pts, res, origin, size):
@@ -47,17 +47,17 @@ def execute_cgal(pts, res, origin, size):
     wpts = map(lambda x: Weighted_point_2(*x), pairs)
     tin = Regular_triangulation_2()
     for pt in wpts: tin.insert(pt)
-    ras = np.zeros(res)
-    xi = 0
-    for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-        yi = 0
-        for y in np.arange(origin[1] + res[1] * size, origin[1], -size):
+    ras = np.zeros([res[1], res[0]])
+    yi = 0
+    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        xi = 0
+        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
             qp = Weighted_point_2(Point_2(x, y), 0)
             interpvalue = regular_neighbor_coordinates_2(tin, qp, [])
-            if interpvalue[1] == True: ras[xi, yi] = interpvalue[0]
-            else: ras[xi, yi] = -9999
-            yi += 1
-        xi += 1
+            if interpvalue[1] == True: ras[yi, xi] = interpvalue[0]
+            else: ras[yi, xi] = -9999
+            xi += 1
+        yi += 1
     return ras
 
 def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
@@ -67,8 +67,6 @@ def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
     to be configured. More about these in the readme on GitHub.
     """
     import pdal
-    if fmt == "ASC":
-        print("ASC format for PDAL-IDW is not supported.")
     if fmt == "GeoTIFF":
         config = ('[\n\t"' + fpath + '",\n' +
                   '\n\t{\n\t\t"output_type": "idw"' +
@@ -78,9 +76,57 @@ def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
                   ',\n\t\t"window_size": ' + str(wnd) +
                   ',\n\t\t"filename": "' + fpath[:-4] +
                   '_IDW.tif"\n\t}\n]')      
-    pipeline = pdal.Pipeline(config)
-    pipeline.execute()
+        pipeline = pdal.Pipeline(config); pipeline.execute()
+    elif fmt == "ASC": print("ASC format for PDAL-IDW is not supported.")
     
+def execute_idwquad(pts, res, origin, size,
+                    start_rk, pwr, minp, incr_rk, method, tolerance, maxiter):
+    """Creates a KD-tree representation of the tile's points and
+    executes a quadrant-based IDW algorithm on them. Although the
+    KD-tree is based on a C implementation, the rest is coded in
+    pure Python (below). Keep in mind that because of this, this
+    is inevitably slower than the rest of the algorithms here.
+    To optimise performance, one is advised to fine-tune the
+    parametrisation, especially tolerance and maxiter.
+    More info in the GitHub readme.
+    """
+    from scipy.spatial import cKDTree
+    ras = np.zeros([res[1], res[0]])
+    tree = cKDTree(np.array([pts[:,0], pts[:,1]]).transpose())
+    yi = 0
+    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        xi = 0
+        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
+            done, i, rk = False, 0, start_rk
+            while done == False:
+                if method == "radial":
+                    ix = tree.query_ball_point([x, y], rk, tolerance)
+                elif method == "k-nearest":
+                    ix = tree.query([x, y], rk, tolerance)
+                xyp = pts[ix]
+                qs = [
+                        xyp[(xyp[:,0] < x) & (xyp[:,1] < y)],
+                        xyp[(xyp[:,0] > x) & (xyp[:,1] < y)],
+                        xyp[(xyp[:,0] < x) & (xyp[:,1] > y)],
+                        xyp[(xyp[:,0] > x) & (xyp[:,1] > y)]
+                     ]
+                if min(qs[0].size, qs[1].size,
+                       qs[2].size, qs[3].size) >= minp: done = True
+                elif i == maxiter:
+                    ras[yi, xi] = -9999; break
+                rk += incr_rk
+                i += 1
+            else:
+                asum, bsum = 0, 0
+                for pt in xyp:
+                    dst = np.sqrt((x - pt[0])**2 + (y - pt[1])**2)
+                    u, w = pt[2], 1 / dst ** pwr
+                    asum += u * w; bsum += w
+                    ras[yi, xi] = asum / bsum
+            xi += 1
+        yi += 1
+    return ras
+
 def write_asc(res, origin, size, raster, fpath):
     """Writes the interpolated TIN-linear and Laplace rasters
     to disk using the ASC format. The header is based on the
@@ -93,9 +139,9 @@ def write_asc(res, origin, size, raster, fpath):
         file_out.write("YLLCORNER " + str(origin[1]) + "\n")
         file_out.write("CELLSIZE " + str(size) + "\n")
         file_out.write("NODATA_VALUE " + str(-9999) + "\n")
-        for yi in range(res[1]):
+        for yi in range(res[1] - 1, -1, -1):
             for xi in range(res[0]):
-                file_out.write(str(raster[xi, yi]) + " ")
+                file_out.write(str(raster[yi, xi]) + " ")
             file_out.write("\n")
 
 def write_geotiff(raster, origin, fpath):
@@ -118,7 +164,7 @@ def write_geotiff(raster, origin, fpath):
                            ) as out_file:
             out_file.write(raster, 1)
            
-def ip_worker(mapped):
+def ip_worker(mp):
     """Multiprocessing worker function to be used by the
     p.map function to map objects to, and then start
     multiple times in parallel on separate CPU cores.
@@ -127,44 +173,53 @@ def ip_worker(mapped):
     Runs slightly different workflows depending on the
     desired interpolation method/export format.
     """
-    print("PID {} starting to interpolate file {}".format(
-        os.getpid(), mapped[2]))
-    size, fpath = mapped[0], (mapped[1] + mapped[2])[:-4] + '_gf.las' 
+    size, fpath, fname = mp[0], (mp[1] + mp[2])[:-4] + '_gf.las', mp[2]
+    target_folder, method, fmt = mp[1], mp[3], mp[4]
+    idw0, idw1, idw2, idw3 = mp[5], mp[6], mp[7], mp[8] 
+    idw4, idw5, idw6 = mp[8], mp[9], mp[10], mp[11]
+    print("PID {} starting to interpolate file {}".format(os.getpid(), fname))
     start = time()
-    if mapped[3] == 'PDAL-IDW':
-        execute_pdal(mapped[1], fpath, size, mapped[4],
-                     mapped[5], mapped[6], mapped[7])
+    if method == 'PDAL-IDW':
+        execute_pdal(target_folder, fpath, size, fmt, idw0, idw1, idw2)
         end = time()
         print("PID {} finished interpolation and export.".format(os.getpid()),
           "Time elapsed: {} sec.".format(round(end - start, 2)))
         return
     gnd_coords, res, origin = prepare(size, fpath)
-    if mapped[3] == 'startin-TINlinear' or mapped[4] == 'startin-Laplace':
-        ras = execute_startin(gnd_coords, res, origin, size, mapped[4])
-    elif mapped[3] == 'CGAL-NN':
+    if method == 'startin-TINlinear' or method == 'startin-Laplace':
+        ras = execute_startin(gnd_coords, res, origin, size, method)
+    elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
+    elif method == 'IDWquad':
+        ras = execute_idwquad(gnd_coords, res, origin, size,
+                              idw0, idw1, idw2, idw3, idw4, idw5, idw6)
     end = time()
     print("PID {} finished interpolation.".format(os.getpid()),
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
     start = time()
-    if mapped[3] == 'startin-TINlinear' and mapped[4] == 'ASC':
+    if method == 'startin-TINlinear' and fmt == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_TINlinear.tif')
+    if method == 'startin-Laplace' and fmt == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_Laplace.tif')
+    if method == 'CGAL-NN' and fmt == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_NN.tif')
+    if method == 'IDWquad' and fmt == 'GeoTIFF':
+        write_geotiff(ras, origin, fpath[:-4] + '_IDWquad.tif')
+    if method == 'startin-TINlinear' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_TINlinear.asc')
-    if mapped[3] == 'startin-Laplace' and mapped[4] == 'ASC':
+    if method == 'startin-Laplace' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_Laplace.asc')
-    if mapped[3] == 'CGAL-NN' and mapped[4] == 'ASC':
+    if method == 'CGAL-NN' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_NN.asc')
-    if mapped[3] == 'startin-TINlinear' and mapped[4] == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_TINlinear.tif', mapped[3])
-    if mapped[3] == 'startin-Laplace' and mapped[4] == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_Laplace.tif', mapped[3])
-    if mapped[3] == 'CGAL-NN' and mapped[4] == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_NN.tif', mapped[3])
+    if method == 'IDWquad' and fmt == 'ASC':
+        write_asc(res, origin, size, ras, fpath[:-4] + '_IDWquad.asc')
     end = time()
     print("PID {} finished exporting.".format(os.getpid()),
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
     
-def start_pool(target_folder, size, method, fmt,
-               rad = 10, pwr = 2, wnd = 0):
+def start_pool(target_folder, size = 1, method = "startin-Laplace",
+               fmt = "GeoTIFF", idw0 = 5, idw1 = 2, idw2 = 0,
+               idw3 = 2, idw4 = 0.2, idw5 = 3, idw6 = "radial"):
     """Assembles and executes the multiprocessing pool.
     The interpolation variants/export formats are handled
     by the worker function (ip_worker(mapped)).
@@ -185,7 +240,8 @@ def start_pool(target_folder, size, method, fmt,
     pre_map = []
     for i in range(processno):
         pre_map.append([float(size), target_folder, fnames[i].strip("\n"),
-                        method, fmt, rad, pwr, wnd])
+                        method, fmt, float(idw0), float(idw1), float(idw2),
+                        float(idw3), float(idw4), float(idw5), float(idw6)])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
     p.close(); p.join()
