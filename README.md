@@ -38,7 +38,7 @@ which should be the target folder. An example call in the Windows Anaconda Promp
 
 It will deposit the ground filtered tiles as LAS files tagged with `_gf.las` in the target folder.
 
-**NEW:** We discussed with Khaled that this may be very useful for all sorts of pre-processing jobs via PDAL, not just ground filtering. He suggested the following changes, which I have now implemented:
+**NEW:** We discussed with Khaled that this may be very useful for all sorts of pre-processing jobs via PDAL, not just ground filtering. He suggested some changes, which I have now implemented:
 
 * You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, for `somefile_dsm.las` for example, you may write `python [file_path_to_main] [target_folder] dsm`.
 * You can also provide a tag for the input config file. For example for a pre-processing job you may call it `config_pre.json`, in which case you would write `python [file_path_to_main] [target_folder] dsm pre`.
