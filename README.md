@@ -50,9 +50,9 @@ The intended workflow is:
     3. interpolation method, one of:
         * startin-TINlinear
         * startin-Laplace _(default)_
-        * CGAL-NN
-		* PDAL-IDW
-		* IDWquad
+        * CGAL-NN _(NOTE: Currently uses regular truangulation / regular neighbour interpolation, which is nearly useless to us. Will try to implement proper nearest neighbours later.)
+	* PDAL-IDW
+	* IDWquad
     4. output format, one of:
         * ASC
         * GeoTIFF _(default)_
