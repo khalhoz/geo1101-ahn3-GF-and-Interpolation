@@ -176,7 +176,7 @@ def ip_worker(mp):
     size, fpath, fname = mp[0], (mp[1] + mp[2])[:-4] + '_gf.las', mp[2]
     target_folder, method, fmt = mp[1], mp[3], mp[4]
     idw0, idw1, idw2, idw3 = mp[5], mp[6], mp[7], mp[8] 
-    idw4, idw5, idw6 = mp[8], mp[9], mp[10]
+    idw4, idw5, idw6 = mp[9], mp[10], mp[11]
     print("PID {} starting to interpolate file {}".format(os.getpid(), fname))
     start = time()
     if method == 'PDAL-IDW':
