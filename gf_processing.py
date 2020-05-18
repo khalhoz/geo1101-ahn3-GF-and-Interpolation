@@ -5,12 +5,12 @@ from time import time
 from multiprocessing import Pool, cpu_count
 import pdal
 
-def initialise(target_folder):
+def initialise(target_folder, json):
     """This function reads and returns the configuration JSON file and the
     list of file names. These are assumed to be called config.json
     and fnames.txt and to be found in the same folder as the LAS files.
     """
-    with open(target_folder + "config.json", 'r') as file_in:
+    with open(target_folder + "config" + json + ".json", 'r') as file_in:
         config = file_in.read()
     with open(target_folder + "fnames.txt", 'r') as file_in:
         fnames = file_in.readlines()
@@ -26,9 +26,9 @@ def worker(mapped):
     """
     print("PID {} starting to ground filter file {}".format(
         os.getpid(), mapped[2]))
-    config, fpath = mapped[0], mapped[1] + mapped[2]
+    config, fpath, tag = mapped[0], mapped[1] + mapped[2], mapped[3]
     config = ('[\n\t"' + fpath + '",\n' + config +
-              '\n\t"' + fpath[:-4] + '_gf.las"\n]')
+              '\n\t"' + fpath[:-4] + '_' + tag + '.las"\n]')
     pipeline = pdal.Pipeline(config)
     start = time()
     pipeline.execute()
@@ -40,7 +40,7 @@ def worker(mapped):
     arrays = pipeline.arrays
     return log, metadata, arrays
 
-def start_pool(target_folder):
+def start_pool(target_folder, tag = "gf", json = ""):
     """Assembles and executes the multiprocessing pool and
     merges the return values (logs, metadata, data arrays).
     It currently writes the logs and metadata to disk and
@@ -54,7 +54,7 @@ def start_pool(target_folder):
     the ground filtering processes completed as part of the
     multiprocessing pool.
     """
-    config, fnames = initialise(target_folder)
+    config, fnames = initialise(target_folder, json)
     cores = cpu_count()
     print("\nStarting interpolation pool of processes on the {}".format(
         cores) + " logical cores found in this PC.\n")
@@ -69,7 +69,7 @@ def start_pool(target_folder):
     pre_map = []
     for i in range(processno):
         fnames[i] = fnames[i].strip("\n")
-        pre_map.append([config, target_folder, fnames[i]])
+        pre_map.append([config, target_folder, fnames[i], tag])
     p = Pool(processes = processno)
     out = p.map(worker, pre_map)
     logs_gf, meta_gf, arrays_gf = [], [], []

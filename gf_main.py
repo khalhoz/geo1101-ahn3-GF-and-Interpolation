@@ -11,12 +11,21 @@ as also shown in the example file.
 Use an ABSOLUTE file path to avoid problems (especially when working from virtual environments)!
 Example command line call (in Anaconda Prompt on Windows):
 "python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/"
-The output files will be written to the target folder too. They will be tagged with "_out".
-The returned pdal logs and metadata will also be written there tagged "_log" and "_meta" respectively."""
+The output files will be written to the target folder too. They will be tagged with "_gf".
+The returned pdal logs and metadata will also be written there tagged "_log" and "_meta" respectively.
 
-##############################
-# JSON PIPELINE CONFIG GUIDE #
-##############################
+Optionally, you may provide a second argument to specify what to tag the output file with.
+For example, if you are running a PDAL pre-rocessing job rather than ground filtering, you could
+run "python [target_folder] pre" which would tag the output files with "_pre".
+Additionally, a third command line argument may be passed to specify an alternative config file filename.
+For example, you can create a separate config for the pre-processin job by calling your file
+config_pre.json and passing "python [target_folder] pre pre" in the command line to indicate
+that your config file also has the matching "_pre" tag in its filename.
+"""
+
+######################################
+# DEFAULT JSON PIPELINE CONFIG GUIDE #
+######################################
 # More info available at https://pdal.io/pipeline.html and also
 # in more detail at https://pdal.io/apps/pipeline.html.
 # !The default config is based on https://pdal.io/tutorial/ground-filters.html!
@@ -40,7 +49,7 @@ The returned pdal logs and metadata will also be written there tagged "_log" and
 # [step 5]  extracting the point that were classified as ground
 
 def main():
-    if len(argv) == 2: start_pool(*argv[1:])
+    if 2 <= len(argv) <= 4: start_pool(*argv[1:])
     else: print("Error: Incorrect number of arguments passed. Returning.")
 
 if __name__ == '__main__':

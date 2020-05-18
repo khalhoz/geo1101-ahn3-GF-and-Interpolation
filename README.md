@@ -27,7 +27,7 @@ ellipsodial IDW solution in the future, but it is proving much more difficult th
 
 Read the new section _"More about the IDW algorithms"_ below for more info about the IDW algorithms.
 
-## PDAL-based ground filtering user guide
+## PDAL-based ground filtering/pre-processing user guide
 
 1. Copy the example configuration files (`config.json`, `fnames.txt`) to your target folder (in which the LAS files are located).
 2. Edit the configuration files.
@@ -37,6 +37,11 @@ Read the new section _"More about the IDW algorithms"_ below for more info about
 which should be the target folder. An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/`
 
 It will deposit the ground filtered tiles as LAS files tagged with `_gf.las` in the target folder.
+
+**NEW:** We discussed with Khaled that this may be very useful for all sorts of pre-processing jobs via PDAL, not just ground filtering. He suggested the following changes, which I have now implemented:
+
+* You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, for `somefile_dsm.las` for example, you may write `python [file_path_to_main] [target_folder] dsm`.
+* You can also provide a tag for the input config file. For example for a pre-processing job you may call it `config_pre.json`, in which case you would write `python [file_path_to_main] [target_folder] dsm pre`.
 
 ## Interpolation user guide
 
