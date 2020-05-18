@@ -76,7 +76,7 @@ An example call in the Windows Anaconda Prompt would be:
 
 Or for the PDAL-IDW algorithm with radius and power values it would be
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ 0.5 PDAL-IDW 10 2 GeoTIFF`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ 0.5 PDAL-IDW GeoTIFF 10 2`
 
 ### A word of caution
 
