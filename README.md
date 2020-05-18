@@ -46,14 +46,14 @@ The intended workflow is:
 1. Check that you still have the ground filtered files and the `fnames.txt` file in your target folder.
 2. Run `ip_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. The following arguments should be provided:
     1. target folder (most likely the same as the one you used with PDAL)
-    2. pixel size (in metres) for interpolation _(the default is one)_
+    2. pixel size (in metres) for interpolation _(the default value is 1)_
     3. interpolation method, one of:
         * startin-TINlinear
         * startin-Laplace _(default)_
         * CGAL-NN _(NOTE: Currently uses regular truangulation / regular neighbour interpolation, which is nearly useless to us. Will try to implement proper nearest neighbours later.)_
-	* PDAL-IDW
-	* IDWquad
-    4. output format, one of:
+		* PDAL-IDW
+		* IDWquad
+	4. output format, one of:
         * ASC
         * GeoTIFF _(default)_
     5. IDW argument 1:
