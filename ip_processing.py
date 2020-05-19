@@ -78,7 +78,7 @@ def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
                   '_IDW.tif"\n\t}\n]')      
         pipeline = pdal.Pipeline(config); pipeline.execute()
     elif fmt == "ASC": print("ASC format for PDAL-IDW is not supported.")
-    
+
 def execute_idwquad(pts, res, origin, size,
                     start_rk, pwr, minp, incr_rk, method, tolerance, maxiter):
     """Creates a KD-tree representation of the tile's points and
@@ -144,7 +144,7 @@ def write_asc(res, origin, size, raster, fpath):
                 file_out.write(str(raster[yi, xi]) + " ")
             file_out.write("\n")
 
-def write_geotiff(raster, origin, fpath):
+def write_geotiff(raster, origin, size, fpath):
     """Writes the interpolated TIN-linear and Laplace rasters
     to disk using the GeoTIFF format. The header is based on
     the raster array and a manual definition of the coordinate
@@ -152,7 +152,8 @@ def write_geotiff(raster, origin, fpath):
     """
     import rasterio
     from rasterio.transform import Affine
-    transform = Affine.translation(origin[0], origin[1])
+    transform = (Affine.translation(origin[0], origin[1])
+                 * Affine.scale(size, size))
     with rasterio.Env():
         with rasterio.open(fpath, 'w', driver = 'GTiff',
                            height = raster.shape[0],
@@ -163,7 +164,7 @@ def write_geotiff(raster, origin, fpath):
                            transform = transform
                            ) as out_file:
             out_file.write(raster, 1)
-           
+
 def ip_worker(mp):
     """Multiprocessing worker function to be used by the
     p.map function to map objects to, and then start
@@ -198,13 +199,13 @@ def ip_worker(mp):
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
     start = time()
     if method == 'startin-TINlinear' and fmt == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_TINlinear.tif')
+        write_geotiff(ras, origin, size, fpath[:-4] + '_TINlinear.tif')
     if method == 'startin-Laplace' and fmt == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_Laplace.tif')
+        write_geotiff(ras, origin, size, fpath[:-4] + '_Laplace.tif')
     if method == 'CGAL-NN' and fmt == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_NN.tif')
+        write_geotiff(ras, origin, size, fpath[:-4] + '_NN.tif')
     if method == 'IDWquad' and fmt == 'GeoTIFF':
-        write_geotiff(ras, origin, fpath[:-4] + '_IDWquad.tif')
+        write_geotiff(ras, origin, size, fpath[:-4] + '_IDWquad.tif')
     if method == 'startin-TINlinear' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_TINlinear.asc')
     if method == 'startin-Laplace' and fmt == 'ASC':
@@ -216,7 +217,7 @@ def ip_worker(mp):
     end = time()
     print("PID {} finished exporting.".format(os.getpid()),
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
-    
+
 def start_pool(target_folder, size = 1, method = "startin-Laplace",
                fmt = "GeoTIFF", idw0 = 5, idw1 = 2, idw2 = 0,
                idw3 = 2, idw4 = "radial", idw5 = 0.2, idw6 = 3):
