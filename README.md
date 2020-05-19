@@ -5,13 +5,13 @@
 ## In repo so far:
 
 * `Khaled_Interpolation` _(Some interpolation testing code from Khaled)_
-* `gf_target_example` (example folder for LAS input files)
+* `gf_target_example` _(example folder for LAS input files)_
 	* `config.json` _(ground filtering configuration file which you can push updates to)_
 	* `config_default.json` _(default ground filtering configuration file which should not be modified)_
-	* `config_final.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)
+	* `config_final.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)_
 	* `fnames.txt` _(list of input files names for the ground filtering program)_
 * `Ground filtering report.pdf` _(Manos's draft report on the ground filtering results.)_
-* `README.md` _(This readme file.)_
+* `README.md` _(this readme file)_
 * `gdal_attempt.py` _(a half-baked test program for direct interpolation via GDAL)_
 * `gf_main.py` _(main file for ground filtering)_
 * `gf_processing.py` _(ground filtering code)_
