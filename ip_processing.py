@@ -31,30 +31,41 @@ def execute_startin(pts, res, origin, size, method):
     return ras
 
 def execute_cgal(pts, res, origin, size):
-    """Performs CGAL-NN on the input points. Uses something
-    that is called regular neighbour coordinates in CGAL, which
-    really just means a 2D triangulation with weights.
-    The last argument of the query point (qp) is also a weight.
-    I don't know what it's for, but it affects the results.
-    I set it to zero for now, but we should find out what it is
-    during the testing phase.
+    """Performs CGAL-NN on the input points.
+    First it removes any potential duplicates from the
+    input points, as these would cause issues with the
+    dictionary-based attribute mapping.
+    Then, it creates CGAL Point_2 object from these points,
+    inserts them into a CGAL Delaunay_triangulation_2, and
+    performs interpolation using CGAL natural_neighbor_coordinate_2
+    by finding the attributes (Z coordinates) via the dictionary
+    that was created from the deduplicated points.
     """
-    from CGAL.CGAL_Kernel import Point_2, Weighted_point_2
-    from CGAL.CGAL_Triangulation_2 import Regular_triangulation_2
-    from CGAL.CGAL_Interpolation import regular_neighbor_coordinates_2
-    cpts = list(map(lambda x: Point_2(*x), pts[:,:2].tolist()))
-    pairs = [(p, z) for p, z in zip(cpts, pts[:,2].tolist())]
-    wpts = map(lambda x: Weighted_point_2(*x), pairs)
-    tin = Regular_triangulation_2()
-    for pt in wpts: tin.insert(pt)
+    from CGAL.CGAL_Kernel import Point_2
+    from CGAL.CGAL_Triangulation_2 import Delaunay_triangulation_2
+    from CGAL.CGAL_Interpolation import natural_neighbor_coordinates_2
+    sorted_idx = np.lexsort(pts.T)
+    sorted_data = pts[sorted_idx,:]
+    row_mask = np.append([True], np.any(np.diff(sorted_data[:,:2],
+                                                axis = 0), 1))
+    deduped = sorted_data[row_mask]
+    cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
+    zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2]))
+    tin = Delaunay_triangulation_2()
+    for pt in cpts: tin.insert(pt)
     ras = np.zeros([res[1], res[0]])
     yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
         xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-            qp = Weighted_point_2(Point_2(x, y), 0)
-            interpvalue = regular_neighbor_coordinates_2(tin, qp, [])
-            if interpvalue[1] == True: ras[yi, xi] = interpvalue[0]
+            nbrs = [];
+            qry = natural_neighbor_coordinates_2(tin, Point_2(x, y), nbrs)
+            if qry[1] == True:
+                z_out = 0
+                for nbr in nbrs:
+                    z, w = zs[(nbr[0].x(), nbr[0].y())], nbr[1] / qry[0]
+                    z_out += z * w
+                ras[yi, xi] = z_out
             else: ras[yi, xi] = -9999
             xi += 1
         yi += 1
