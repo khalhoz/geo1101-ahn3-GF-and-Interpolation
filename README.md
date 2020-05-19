@@ -55,7 +55,7 @@ The intended workflow is:
     3. interpolation method, one of:
         * startin-TINlinear
         * startin-Laplace _(default)_
-        * CGAL-NN _(NOTE: Currently uses regular truangulation / regular neighbour interpolation, which is nearly useless to us. Will try to implement proper nearest neighbours later.)_
+        * CGAL-NN _(NOTE: Re-designed the algorithm, now uses true natural neighbours.)_
 		* PDAL-IDW
 		* IDWquad
 	4. output format, one of:
@@ -91,6 +91,13 @@ from the same prompt. So, for example:
 2. `python [file_path_to_main] [argument_1] [argument_2] [...]`
 
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path.
+
+Another word of caution with the outputs is that they all use a fixed no-data value of -9999. This includes the GeoTIFF exporter. To view the results correctly, you should keep in
+mind that while the upper bounds of the data will be determined correctly by the viewer software (e.g. QGIS), the lower bound will be -9999. To see the DTM/DSM the program interpolated,
+you need to set the lower bound of the colour scale to a higher value relevant to the data. As AHN3 depicts Dutch terrain, you are advised to use a value somewhere between -20 and 0 metres
+depending on the tile. Negative elevation values are perfectly possible in The Netherlands.
+In QGIS, you do this by right clicking on your raster layer, and clicking on "Properties...". In the window that pops up, you can change the lower bound of the colour scale by
+adjusting the value in the field Symbology --> Band Rendering --> Min.
 
 **Note:** ASC export is not currently supported for the PDAL-IDW algorithm.
 
@@ -136,3 +143,6 @@ to export into OGR files rather than LAS files and then simply use those as inpu
 Python randomly while exporting. I can run the same code 10 times in a loop and 3-4 out of 10 attempts it will export correctly, but in the other cases it will crash. Unfortunately this makes it useless to us.
 I have been trying to get this to work in Python 3.8, which could potentially be the source of the issues. I'll try to experiment with other combinations of Python and PDAL versions in the future.
 _Now that I also implemented quadrant-based IDW, perhaps we might not need this after all?_
+
+A further idea would be to implement no-data mask layers for the GeoTIFF exporter. This would make them easier to visualise, as the no-data pixels would be masked out by the no-data
+layer, rather than simply being marked as no-data by the fixed value -9999.
