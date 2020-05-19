@@ -25,9 +25,10 @@ ellipsodial IDW solution in the future, but it is proving much more difficult th
 
 **NEW STUFF**
 
+* Re-wrote the CGAL-NN algorithm to use true natural neighbours and not regular neighbours
 * Added the IDWquad method
 * Fixed lots of bugs
-* The orientation of the exported rasters should not be correct, not randomly rotated
+* The orientation of the exported rasters should now be correct, not randomly rotated
 
 Read the new section _"More about the IDW algorithms"_ below for more info about the IDW algorithms.
 
