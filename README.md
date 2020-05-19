@@ -4,16 +4,20 @@
 
 ## In repo so far:
 
+* `Khaled_Interpolation` _(Some interpolation testing code from Khaled)_
+* `gf_target_example` (example folder for LAS input files)
+	* `config.json` _(ground filtering configuration file which you can push updates to)_
+	* `config_default.json` _(default ground filtering configuration file which should not be modified)_
+	* `config_final.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)
+	* `fnames.txt` _(list of input files names for the ground filtering program)_
+* `Ground filtering report.pdf` _(Manos's draft report on the ground filtering results.)_
+* `README.md` _(This readme file.)_
+* `gdal_attempt.py` _(a half-baked test program for direct interpolation via GDAL)_
+* `gf_main.py` _(main file for ground filtering)_
+* `gf_processing.py` _(ground filtering code)_
+* `ip_main.py` _(main file for interpolation)_
+* `ip_processing.py` _(interpolation code)_
 * `las_prepare.py` _(factored out from `gf_processing.py`)_
-* `gf_main.py`
-* `gf_processing.py`
-* `ip_main.py`
-* `ip_processing.py`
-* `gdal_attempt.py`
-* target_example (folder)
-	* `fnames.txt`
-	* `config.json` _(which you can push updates to)_
-	* `config_default.json` _(which should not be modified, it is there for reference)_
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering via PDAL, TIN-linear and Laplace interpolation via startin, 
 natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code. We might be able to implement an
