@@ -88,7 +88,7 @@ Or for the PDAL-IDW algorithm with radius and power values it would be
 
 `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ 0.5 PDAL-IDW GeoTIFF 10 2`
 
-### A word of caution
+## A word of caution
 
 If you are using an Anaconda virtual environment for PDAL/CGAL, you should first activate the environment in Anaconda prompt and _then_ run the relevant script
 from the same prompt. So, for example:
@@ -108,9 +108,9 @@ adjusting the value in the field Symbology --> Band Rendering --> Min.
 
 **Another note:** You are advised to configure the IDWradial parametrisation **with performance in mind** when first getting started with IDWquad. Otherwise it might take _veeeeeery long_ to finish.
 
-### More about the IDW algorithms
+## More about the IDW algorithms
 
-#### PDAL-IDW
+### PDAL-IDW
 The PDAL-IDW workflow is actually built on top of GDAL, but since GDAL does not play well with Python data structures, I used the interface that is provided within PDAL's pipeline framework to implement it.
 No part of the program currently uses the Python bindings of GDAL directly, but we might need to eventually start working with it. The ellipsoidal IDW features cannot be accessed through PDAL's interface for GDAL,
 hence they cannot be used here (hence PDAL-IDW only accepts one radius). There is a neat extra feature in the PDAL interface though, it allows a fallback method to be used. If you specify a value for an interpolation window
@@ -118,7 +118,7 @@ hence they cannot be used here (hence PDAL-IDW only accepts one radius). There i
 true IDW interpolation). For example, if you provide a value of 10 for this argument, it will look for values in a 10x10 square kernel around the pixel for values, weighting them based on their distance from the
 pixel that is being interpolated. This can theoretically make the result more or less continuous (a bit more like the Voronoi and TIN-based methods).
 
-#### IDWquad
+### IDWquad
 This is a quadrant-based IDW implementation that is not built on top of third-party software (apart from scipy, from which cKDTree is used). It builds a KD-tree representation of the points of the input tile and
 overlay it with a raster of the desired dimensions. For each pixel, it iteratively queries more and more points until it has enough points **per quadrant** to consider an IDW interpolation reliable. The algorithm
 can either based its KD-tree queries on k-nearest neighbours to find, or a query radius to search within.
@@ -134,7 +134,7 @@ I'll explain how it works by giving some more detail about the parameters, listi
 	* If you use k-nearest queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query.html#scipy.spatial.cKDTree.query
 * **Iteration limit:** you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
 
-### Future work
+## Future work
 
 The current version of this implementation runs as many processes in parallel as there are input files, hence using all processor cores when there are at least as many files as there are cores in
 the given system. This multiprocessing implementation is based on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at.
