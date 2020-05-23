@@ -71,6 +71,57 @@ def execute_cgal(pts, res, origin, size):
         yi += 1
     return ras
 
+    # function that Khaled has added
+def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
+    from CGAL.CGAL_Kernel import Point_2
+    from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
+    from CGAL.CGAL_Mesh_2 import Delaunay_mesh_size_criteria_2
+    from CGAL import CGAL_Mesh_2
+    import fiona 
+    import shapely.geometry as sg
+
+    cdt=Mesh_2_Constrained_Delaunay_triangulation_2()
+
+    footprints = fiona.open(bag_Poly)
+
+    buil_footprint = []
+    constraints    = []
+    for i in range (3): #len(footprints)
+        buil_Poly = sg.shape(footprints[i]["geometry"])
+        cter = 0 
+        constraints    = []
+        for xy_ in buil_Poly.exterior.coords[:-1]:
+            const1 = cdt.insert(Point_2(xy_[0], xy_[1]))
+            const2 = cdt.insert(Point_2(buil_Poly.exterior.coords[cter+1][0], buil_Poly.exterior.coords[cter+1][1]))
+            constraints.append((const1, const2))
+        buil_footprint.append(constraints)
+        constraints = []
+        """
+        this part causing the program to crash
+    for build in buil_footprint:
+        for const in build:
+            cdt.insert_constraint(const[0], const[1])
+        """
+    # example from the website #### this works 
+    sm_p = np.array([[origin[0]+4, origin[1]+4], [origin[0]+8, origin[1]+4],
+                            [origin[0]+8, origin[1]+8],[origin[0]+4, origin[1]+8],
+                            [origin[0]+4, origin[1]+4]])
+    va = cdt.insert(Point_2(sm_p[0][0], sm_p[0][1]))
+    vb = cdt.insert(Point_2(sm_p[1][0], sm_p[1][1]))
+    vc = cdt.insert(Point_2(sm_p[2][0], sm_p[2][1]))
+    vd = cdt.insert(Point_2(sm_p[3][0], sm_p[3][1]))
+    cdt.insert(Point_2(2, 0.6))
+
+    cdt.insert_constraint(cdt.insert(Point_2(sm_p[0][0], sm_p[0][1])), cdt.insert(Point_2(sm_p[1][0], sm_p[1][1])))
+    cdt.insert_constraint(vb, vc)
+    cdt.insert_constraint(vc, vd)
+    cdt.insert_constraint(vd, va)
+    cdt.insert_constraint(buil_footprint[0][0][0], buil_footprint[0][0][1])
+
+    print ("Number of vertices: ", cdt.number_of_vertices())
+
+        # until here 
+
 def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
     """Sets up a PDAL pipeline that reads a ground filtered LAS
     file, and writes it via GDAL. The GDAL writer has interpolation
@@ -202,6 +253,10 @@ def ip_worker(mp):
         ras = execute_startin(gnd_coords, res, origin, size, method)
     elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
+     # "code that Khaled has added"
+    elif method == 'CGAL-CDT':
+        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw4) # here I used the strig argument as a path to BAG polygone dataset cause
+        # until here                                                                    I didn't want to mess with the code.
     elif method == 'IDWquad':
         ras = execute_idwquad(gnd_coords, res, origin, size,
                               idw0, idw1, idw2, idw3, idw4, idw5, idw6)
