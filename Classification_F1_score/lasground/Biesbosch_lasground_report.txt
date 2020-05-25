@@ -1,0 +1,23 @@
+Confusion matrix
+---------------------------  --------------------  ------------------------
+                             Actual ground points  Actual non-ground points
+Predicted ground points      11119                 335
+Predicted non-ground points  4699                  37862
+---------------------------  --------------------  ------------------------
+
+F1-score = 0.8154150777354062
+macro F1-score = 0.8765403480011635
+micro F1-score = 0.906803665648431
+weighted F1-score = 0.9117421212522404
+
+Overall results table
+-------------------------------------
+
+              precision    recall  f1-score   support
+
+           0       0.99      0.89      0.94     42561
+           2       0.70      0.97      0.82     11454
+
+    accuracy                           0.91     54015
+   macro avg       0.85      0.93      0.88     54015
+weighted avg       0.93      0.91      0.91     54015
