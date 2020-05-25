@@ -79,47 +79,32 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     from CGAL import CGAL_Mesh_2
     import fiona 
     import shapely.geometry as sg
+    import matplotlib.pyplot as plt
 
     cdt=Mesh_2_Constrained_Delaunay_triangulation_2()
-
     footprints = fiona.open(bag_Poly)
-
-    buil_footprint = []
-    constraints    = []
-    for i in range (3): #len(footprints)
-        buil_Poly = sg.shape(footprints[i]["geometry"])
-        cter = 0 
+    for i in range (len(footprints)): #len(footprints)
+        buil_Poly = sg.shape(footprints[i]["geometry"]) 
         constraints    = []
         for xy_ in buil_Poly.exterior.coords[:-1]:
             const1 = cdt.insert(Point_2(xy_[0], xy_[1]))
-            const2 = cdt.insert(Point_2(buil_Poly.exterior.coords[cter+1][0], buil_Poly.exterior.coords[cter+1][1]))
-            constraints.append((const1, const2))
-        buil_footprint.append(constraints)
-        constraints = []
-        """
-        this part causing the program to crash
-    for build in buil_footprint:
-        for const in build:
-            cdt.insert_constraint(const[0], const[1])
-        """
-    # example from the website #### this works 
-    sm_p = np.array([[origin[0]+4, origin[1]+4], [origin[0]+8, origin[1]+4],
-                            [origin[0]+8, origin[1]+8],[origin[0]+4, origin[1]+8],
-                            [origin[0]+4, origin[1]+4]])
-    va = cdt.insert(Point_2(sm_p[0][0], sm_p[0][1]))
-    vb = cdt.insert(Point_2(sm_p[1][0], sm_p[1][1]))
-    vc = cdt.insert(Point_2(sm_p[2][0], sm_p[2][1]))
-    vd = cdt.insert(Point_2(sm_p[3][0], sm_p[3][1]))
-    cdt.insert(Point_2(2, 0.6))
-
-    cdt.insert_constraint(cdt.insert(Point_2(sm_p[0][0], sm_p[0][1])), cdt.insert(Point_2(sm_p[1][0], sm_p[1][1])))
-    cdt.insert_constraint(vb, vc)
-    cdt.insert_constraint(vc, vd)
-    cdt.insert_constraint(vd, va)
-    cdt.insert_constraint(buil_footprint[0][0][0], buil_footprint[0][0][1])
-
+            constraints.append(const1)
+        cter = 1
+        for const in constraints:
+            if const != constraints[-1]:
+                cdt.insert_constraint(const, constraints[cter])
+                cter += 1
+            else:
+                cdt.insert_constraint(const, constraints[0])
+    sorted_idx = np.lexsort(pts.T)
+    sorted_data = pts[sorted_idx,:]
+    row_mask = np.append([True], np.any(np.diff(sorted_data[:,:2],
+                                                axis = 0), 1))
+    deduped = sorted_data[row_mask]
+    cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
+    for pt in cpts: cdt.insert(pt)
+    print (cpts[0], len (cpts))
     print ("Number of vertices: ", cdt.number_of_vertices())
-
         # until here 
 
 def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
