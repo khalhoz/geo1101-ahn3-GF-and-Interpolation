@@ -73,7 +73,13 @@ def execute_cgal(pts, res, origin, size):
 
 ### Khaled's experimental CDT interpolation code
 def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
-    """Add a docstring please, so that we know how your code works!
+    """Performs TIN-interpolation using CGAL CDT (Constrained_Delaunay_triangulation)
+    first creates CDT, then add constraints to it derived from a jeojson file 
+    using fiona. second it reads PC from las file and removes any potential 
+    duplicates in the points (this piece of code is borrowed from execute_cgal function). 
+    Then it feeds the points into the CDT. also dict of the z values is created 
+    (P.S constrained points do not have z value in the dictioinary)
+    now  still to be implemented: the actual interpolation code (our own code).
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
@@ -82,11 +88,11 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     import fiona 
     import shapely.geometry as sg
     #import matplotlib.pyplot as plt
-    cdt=Mesh_2_Constrained_Delaunay_triangulation_2()
+    cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
     footprints = fiona.open(bag_Poly)
     for i in range (len(footprints)): #len(footprints)
         buil_Poly = sg.shape(footprints[i]["geometry"]) 
-        constraints    = []
+        constraints = []
         for xy_ in buil_Poly.exterior.coords[:-1]:
             const1 = cdt.insert(Point_2(xy_[0], xy_[1]))
             constraints.append(const1)
@@ -103,7 +109,15 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
                                                 axis = 0), 1))
     deduped = sorted_data[row_mask]
     cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
-    for pt in cpts: cdt.insert(pt)
+    zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2])) #dictionary for z values. Caution: z values of constrained are not added
+    for pt in cpts[:40000]: cdt.insert(pt)     # here all points shoudl be added, just for coding only few points are used
+    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
+            trian = cdt.locate ( Point_2 (x, y))
+            print ((trian.vertex(2).point ()))
+            if (trian.vertex(2).point().x(), trian.vertex(2).point().y()) in zs:
+                print (zs[(trian.vertex(2).point().x(), trian.vertex(2).point().y())])
+
     print (cpts[0], len (cpts))
     print ("Number of vertices: ", cdt.number_of_vertices())
 
