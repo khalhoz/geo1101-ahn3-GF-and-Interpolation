@@ -4,12 +4,18 @@
 The arguments should be specified in this order:
     - target folder (most likely the same as the one you used with PDAL)
       [compulsory, no default value]
+    - bool (True/False) to indicate whether you would like to run pre-
+      processing on the data before interpolating. Equivalent to running
+      the ground filtering code separately, but it faster as it does not
+      write intermediate results to disk. Assumes that the ground-
+      filtering/pre-processing config is in config_preprocess.json.
     - pixel size (in metres) for interpolation
       [default: 1 metre]
     - interpolation method, one of:
         - startin-TINlinear
         - [default] startin-Laplace
         - CGAL-NN
+        - CGAL-CDT (experimental, not ready yet)
         - PDAL-IDW
         - IDWquad
     - output format, one of:
