@@ -73,30 +73,30 @@ The intended workflow is:
 2. Run `ip_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. The following arguments should be provided:
     1. target folder (most likely the same as the one you used with PDAL)
 	2. bool to indicate if you would like pre-processing to be run before interpolation _(the default value is `False`)_
-    2. pixel size (in metres) for interpolation _(the default value is 1)_
-    3. interpolation method, one of:
+    3. pixel size (in metres) for interpolation _(the default value is 1)_
+    4. interpolation method, one of:
         * startin-TINlinear
         * startin-Laplace _(default)_
         * CGAL-NN _(NOTE: Re-designed the algorithm, now uses true natural neighbours.)_
 		* CGAL-CDT _(NOTE: This is the in-development constrained Delaunay TIN-based interpolant, it is not yet intended to be used.)_
 		* PDAL-IDW
 		* IDWquad
-	4. output format, one of:
+	5. output format, one of:
         * ASC
         * GeoTIFF _(default)_
-    5. IDW argument 1:
+    6. IDW argument 1:
 		* _If using PDAL-IDW:_ IDW interpolation radius in metres
 		* _If using IDWquad:_ The _starting_ radius/number of neighbours _k_ to query
-	6. IDW argument 2: IDW interpolation power (exponent) in metres _(both for PDAL-IDW and IDWquad)_
-	7. IDW argument 3:
+	7. IDW argument 2: IDW interpolation power (exponent) in metres _(both for PDAL-IDW and IDWquad)_
+	8. IDW argument 3:
 		* _If using PDAL-IDW:_ interpolation fallback window size
 		* _If using IDWquad:_ minimum number of points to find per quadrant
-	8. IDW argument 4: query radius/number of neighbours _k_ to query, increment step value _(only for IDWquad)_
-	9. IDW argument 5: IDWquad method, one of:
+	9. IDW argument 4: query radius/number of neighbours _k_ to query, increment step value _(only for IDWquad)_
+	10. IDW argument 5: IDWquad method, one of:
 		* radial _(for iterative radius increments)_
 		* k-nearest _(for iterative increments of how many neighbours to query)_
-	10. IDW argument 6: IDWquad KD-tree query tolerance value _eps_
-	11. IDW argument 7: IDWquad maximum number of iterations before declaring no-data and proceeding to next pixel
+	11. IDW argument 6: IDWquad KD-tree query tolerance value _eps_
+	12. IDW argument 7: IDWquad maximum number of iterations before declaring no-data and proceeding to next pixel
 
 An example call in the Windows Anaconda Prompt would be:
 
