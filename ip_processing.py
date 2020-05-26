@@ -338,4 +338,3 @@ def start_pool(target_folder, preprocess = False, size = 1,
     p.map(ip_worker, pre_map)
     p.close(); p.join()
     print("\nAll workers have returned.")
-    print("Success.")

@@ -1,5 +1,5 @@
 ### MULTIPROCESSING POOL-BASED PDAL GROUND FILTERING CODE ###
-import numpy as np
+
 import os
 from time import time
 from multiprocessing import Pool, cpu_count
@@ -60,8 +60,9 @@ def start_pool(write, target_folder, tag = "gf", json = ""):
     if json != "": json = "_" + json
     config, fnames = initialise(target_folder, json)
     cores = cpu_count()
-    print("\nStarting GF/preprocessing pool of processes on the {}".format(
-        cores) + " logical cores found in this PC.\n")
+    print("\nStarting ground filtering/preprocessing pool of " +
+          "processes on the {} ".format(cores) +
+          "logical cores found in this PC.\n")
     if cores < len(fnames):
         print("Warning: more processes in pool than processor cores.\n" +
               "Optimally, roughly as many processes as processor " +
@@ -92,4 +93,3 @@ def start_pool(write, target_folder, tag = "gf", json = ""):
         with open(target_folder + fname[:-4] + "_log.txt", "w") as file_out:
             file_out.write(log)
     return arrays_gf
-    print("Success.")
