@@ -4,20 +4,24 @@
 
 ## In repo so far:
 
+* `Classification_F1_score` _(Khaled & Manos's quantitative ground filtering evaluation results)_
 * `Khaled_Interpolation` _(Some interpolation testing code from Khaled)_
 * `gf_target_example` _(example folder for LAS input files)_
 	* `config.json` _(ground filtering configuration file which you can push updates to)_
 	* `config_default.json` _(default ground filtering configuration file which should not be modified)_
-	* `config_final.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)_
+	* `config_preprocess.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)_
 	* `fnames.txt` _(list of input files names for the ground filtering program)_
-* `Ground filtering report.pdf` _(Manos's draft report on the ground filtering results.)_
+* `Ground filtering.docx` _(Manos's draft report on the ground filtering results)_
 * `README.md` _(this readme file)_
 * `gdal_attempt.py` _(a half-baked test program for direct interpolation via GDAL)_
 * `gf_main.py` _(main file for ground filtering)_
 * `gf_processing.py` _(ground filtering code)_
 * `ip_main.py` _(main file for interpolation)_
 * `ip_processing.py` _(interpolation code)_
+* `ip_st_test` _(some raster tile statistics generation code from Khaled)_
 * `las_prepare.py` _(factored out from `ip_processing.py`)_
+* `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
+
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code. We might be able to implement an
@@ -30,7 +34,17 @@ function is also in the works, and we are currently working on hole-filling/hydr
 * Re-wrote the CGAL-NN algorithm to use true natural neighbours and not regular neighbours
 * Fixed lots of bugs
 
-## PDAL-based ground filtering/pre-processing user guide
+## Current tasks
+
+Khaled is currently working on implementing TIN-Linear intepolation based on a constrained Delaunay TIN (CDT) through CGAL. He can already construct the CDT and is now implementing TIN-linear interpolation.
+
+I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we would like to skip secondary hole filling altogether by using a TIN-based interpolation method.
+This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and will now move on to implementing algorithms.
+Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).
+As a backup plan, we would use Laplace interpolation, but in this case we would not be able to create holes in the triangulation using the water polygons, and we would probably end up needing to overlay them with the rasters post-interpolation.
+
+
+## PDAL pipeline entry point (stand-alone ground filtering/pre-processing)
 
 This is a secondary entry point that only runs a PDAL pipeline. It is intended for testing PDAL's ground filtering and pre-processing capabilities.
 
@@ -45,12 +59,12 @@ It will deposit the ground filtered tiles as LAS files tagged with `_gf.las` in 
 You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, to export `somefile_dsm.las` for example, you may write `python [file_path_to_main] [target_folder] dsm`.
 You can also provide a tag for the input config file. For example for a pre-processing job you may want to call it `config_pre.json`, in which case you would use `python [file_path_to_main] [target_folder] dsm pre`.
 
-## Interpolation user guide
+## Primary entry point (optional ground filtering/pre-processing + interpolation)
 
-This is intended to be the primary entry point to the program. You can either use it to interpolate pre-processed LAS files you had already generated using the above secondary entry point.
-In this case, the program assumes that you have used the default `_gf.las` tag for your final exports. It also needs the same `fnames.txt` file to be present (and the file names in it shoud **not** be tagged `_gf.las`).
+`ip_main.py` is intended to be the primary entry point to the program. You can either use it to interpolate pre-processed LAS files you had already generated using the above secondary entry point, or run ground-filtering/pre-processing as part of this process.
+In the prior case, the program assumes that you used the default `_gf.las` tag for your final exports. It also needs the same `fnames.txt` file to be present (and the file names in it shoud **not** be tagged `_gf.las`).
 
-If you use it as the primary entry point, you do not need to separately pre-process the data. Just provide "True" as the second argument (as described below), and the program will automatically run the PDAL pipeline too.
+If you use this as the primary entry point, you do not need to separately pre-process the data. Just provide `True` as the second argument (as described below), and the program will automatically run the PDAL pipeline too.
 In this case, it is necessary that your config JSON is called `config_preprocess.json`. Note that this solution transfers data between the PDAL-based preprocessing and the interpolation in memory, and is hence _faster_ than running `gf_main.py` separately beforehand.
 The PDAL-IDW method has also been adapted to work so that pre-processing an interpolation form a single pipeline if you are also running pre-processing from this entry point.
 
@@ -139,15 +153,6 @@ I'll explain how it works by giving some more detail about the parameters, listi
 	* If you use radial queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query_ball_point.html#scipy.spatial.cKDTree.query_ball_point
 	* If you use k-nearest queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query.html#scipy.spatial.cKDTree.query
 * **Iteration limit:** you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
-
-## Current tasks
-
-Khaled is currently working on implementing TIN-Linear intepolation based on a constrained Delaunay TIN (CDT) through CGAL. He can already construct the CDT and is now implementing TIN-linear interpolation.
-
-I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we would like to skip secondary hole filling altogether by using a TIN-based interpolation method.
-This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and will now move on to implementing algorithms.
-Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).
-As a backup plan, we would use Laplace interpolation, but in this case we would not be able to create holes in the triangulation using the water polygons, and we would probably end up needing to overlay them with the rasters post-interpolation.
 
 ## Future work
 
