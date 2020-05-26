@@ -17,22 +17,22 @@
 * `gf_processing.py` _(ground filtering code)_
 * `ip_main.py` _(main file for interpolation)_
 * `ip_processing.py` _(interpolation code)_
-* `las_prepare.py` _(factored out from `gf_processing.py`)_
+* `las_prepare.py` _(factored out from `ip_processing.py`)_
 
-The testing environment so far includes multiprocessing pool-based implementations of ground filtering via PDAL, TIN-linear and Laplace interpolation via startin, 
+The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code. We might be able to implement an
-ellipsodial IDW solution in the future, but it is proving much more difficult than anticipated (more about this at the end of the readme).
+ellipsodial IDW solution in the future, but it is proving much more difficult than anticipated (more about this at the end of the readme). Khaled's constrained Delaunay TIN (CDT)-based
+function is also in the works, and we are currently working on hole-filling/hydro-flattening with Lisa.
 
 **NEW STUFF**
 
+* Added an option to pre-process the data before interpolation using a PDAL pipeline, creating a single entry point for the whole process
 * Re-wrote the CGAL-NN algorithm to use true natural neighbours and not regular neighbours
-* Added the IDWquad method
 * Fixed lots of bugs
-* The orientation of the exported rasters should now be correct, not randomly rotated
-
-Read the new section _"More about the IDW algorithms"_ below for more info about the IDW algorithms.
 
 ## PDAL-based ground filtering/pre-processing user guide
+
+This is a secondary entry point that only runs a PDAL pipeline. It is intended for testing PDAL's ground filtering and pre-processing capabilities.
 
 1. Copy the example configuration files (`config.json`, `fnames.txt`) to your target folder (in which the LAS files are located).
 2. Edit the configuration files.
@@ -42,25 +42,29 @@ Read the new section _"More about the IDW algorithms"_ below for more info about
 which should be the target folder. An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/`
 
 It will deposit the ground filtered tiles as LAS files tagged with `_gf.las` in the target folder.
-
-**NEW:** We discussed with Khaled that this may be very useful for all sorts of pre-processing jobs via PDAL, not just ground filtering. He suggested some changes, which I have now implemented:
-
-* You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, for `somefile_dsm.las` for example, you may write `python [file_path_to_main] [target_folder] dsm`.
-* You can also provide a tag for the input config file. For example for a pre-processing job you may call it `config_pre.json`, in which case you would write `python [file_path_to_main] [target_folder] dsm pre`.
+You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, to export `somefile_dsm.las` for example, you may write `python [file_path_to_main] [target_folder] dsm`.
+You can also provide a tag for the input config file. For example for a pre-processing job you may want to call it `config_pre.json`, in which case you would use `python [file_path_to_main] [target_folder] dsm pre`.
 
 ## Interpolation user guide
 
-This is intended to be used after you had generated the ground-filtered files using PDAL (above). The same `fnames.txt` file is used by the program, but it reads the ground filtered
-files (i.e. files marked `_gf.las` rather than the original LAS files).
+This is intended to be the primary entry point to the program. You can either use it to interpolate pre-processed LAS files you had already generated using the above secondary entry point.
+In this case, the program assumes that you have used the default `_gf.las` tag for your final exports. It also needs the same `fnames.txt` file to be present (and the file names in it shoud **not** be tagged `_gf.las`).
+
+If you use it as the primary entry point, you do not need to separately pre-process the data. Just provide "True" as the second argument (as described below), and the program will automatically run the PDAL pipeline too.
+In this case, it is necessary that your config JSON is called `config_preprocess.json`. Note that this solution transfers data between the PDAL-based preprocessing and the interpolation in memory, and is hence _faster_ than running `gf_main.py` separately beforehand.
+The PDAL-IDW method has also been adapted to work so that pre-processing an interpolation form a single pipeline if you are also running pre-processing from this entry point.
+
 The intended workflow is:
-1. Check that you still have the ground filtered files and the `fnames.txt` file in your target folder.
+1. Check that you still have the ground filtered files and the `fnames.txt` file in your target folder if you had run the ground filtering/pre-processing workflow separately beforehand.
 2. Run `ip_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. The following arguments should be provided:
     1. target folder (most likely the same as the one you used with PDAL)
+	2. bool to indicate if you would like pre-processing to be run before interpolation _(the default value is `False`)_
     2. pixel size (in metres) for interpolation _(the default value is 1)_
     3. interpolation method, one of:
         * startin-TINlinear
         * startin-Laplace _(default)_
         * CGAL-NN _(NOTE: Re-designed the algorithm, now uses true natural neighbours.)_
+		* CGAL-CDT _(NOTE: This is the in-development constrained Delaunay TIN-based interpolant, it is not yet intended to be used.)_
 		* PDAL-IDW
 		* IDWquad
 	4. output format, one of:
@@ -82,11 +86,11 @@ The intended workflow is:
 
 An example call in the Windows Anaconda Prompt would be:
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ 1 startin-TINlinear ASC`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ False 2 startin-TINlinear ASC`
 
-Or for the PDAL-IDW algorithm with radius and power values it would be
+Or for the PDAL-IDW algorithm (using pre-processing) with radius and power values it would be
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ 0.5 PDAL-IDW GeoTIFF 10 2`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ True 0.5 PDAL-IDW GeoTIFF 10 2`
 
 ## A word of caution
 
@@ -96,6 +100,8 @@ from the same prompt. So, for example:
 2. `python [file_path_to_main] [argument_1] [argument_2] [...]`
 
 Relative file paths won't work in virtual environments, so make sure you specify the target folder using a full (absolute) file path.
+I implemented the program in such a way, that only those modules are imported which are necessary for the given operation. For instance, if you are using neither pre-processing,
+nor PDAL-IDW, then you do not need to have PDAL in your virtual environment to run the program.
 
 Another word of caution with the outputs is that they all use a fixed no-data value of -9999. This includes the GeoTIFF exporter. To view the results correctly, you should keep in
 mind that while the upper bounds of the data will be determined correctly by the viewer software (e.g. QGIS), the lower bound will be -9999. To see the DTM/DSM the program interpolated,
@@ -134,10 +140,19 @@ I'll explain how it works by giving some more detail about the parameters, listi
 	* If you use k-nearest queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query.html#scipy.spatial.cKDTree.query
 * **Iteration limit:** you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
 
+## Current tasks
+
+Khaled is currently working on implementing TIN-Linear intepolation based on a constrained Delaunay TIN (CDT) through CGAL. He can already construct the CDT and is now implementing TIN-linear interpolation.
+
+I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we would like to skip secondary hole filling altogether by using a TIN-based interpolation method.
+This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and will now move on to implementing algorithms.
+Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).
+As a backup plan, we would use Laplace interpolation, but in this case we would not be able to create holes in the triangulation using the water polygons, and we would probably end up needing to overlay them with the rasters post-interpolation.
+
 ## Future work
 
 The current version of this implementation runs as many processes in parallel as there are input files, hence using all processor cores when there are at least as many files as there are cores in
-the given system. This multiprocessing implementation is based on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at.
+the given system. This multiprocessing implementation is based on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at. _No final decision yet._
 
 We should probably also experiment around with the `filters.pmf` method that is provided by PDAL. The example parametrisation uses `filters.smrf`. You can start experimenting with this simply by changing the JSON parametrisation, the code does not need to be edited.
 There's further guidance in `gf_main.py` on what's what in `config.json`. _(Completed.)_
@@ -150,4 +165,4 @@ I have been trying to get this to work in Python 3.8, which could potentially be
 _Now that I also implemented quadrant-based IDW, perhaps we might not need this after all?_
 
 A further idea would be to implement no-data mask layers for the GeoTIFF exporter. This would make them easier to visualise, as the no-data pixels would be masked out by the no-data
-layer, rather than simply being marked as no-data by the fixed value -9999.
+layer, rather than simply being marked as no-data by the fixed value -9999. _Not being worked on at the moment._

@@ -49,7 +49,7 @@ that your config file also has the matching "_pre" tag in its filename.
 # [step 5]  extracting the point that were classified as ground
 
 def main():
-    if 2 <= len(argv) <= 4: start_pool(*argv[1:])
+    if 2 <= len(argv) <= 4: start_pool(True, *argv[1:])
     else: print("Error: Incorrect number of arguments passed. Returning.")
 
 if __name__ == '__main__':

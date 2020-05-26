@@ -71,16 +71,17 @@ def execute_cgal(pts, res, origin, size):
         yi += 1
     return ras
 
-    # function that Khaled has added
+### Khaled's experimental CDT interpolation code
 def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
+    """Add a docstring please, so that we know how your code works!
+    """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
-    from CGAL.CGAL_Mesh_2 import Delaunay_mesh_size_criteria_2
-    from CGAL import CGAL_Mesh_2
+    #from CGAL.CGAL_Mesh_2 import Delaunay_mesh_size_criteria_2
+    #from CGAL import CGAL_Mesh_2
     import fiona 
     import shapely.geometry as sg
-    import matplotlib.pyplot as plt
-
+    #import matplotlib.pyplot as plt
     cdt=Mesh_2_Constrained_Delaunay_triangulation_2()
     footprints = fiona.open(bag_Poly)
     for i in range (len(footprints)): #len(footprints)
@@ -105,24 +106,37 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     for pt in cpts: cdt.insert(pt)
     print (cpts[0], len (cpts))
     print ("Number of vertices: ", cdt.number_of_vertices())
-        # until here 
 
-def execute_pdal(target_folder, fpath, size, fmt, rad, pwr, wnd):
+def execute_pdal(preprocessed, target_folder, fpath, size, fmt, rad, pwr, wnd):
     """Sets up a PDAL pipeline that reads a ground filtered LAS
     file, and writes it via GDAL. The GDAL writer has interpolation
     options, exposing the radius, power and a fallback kernel width
     to be configured. More about these in the readme on GitHub.
     """
-    import pdal
+    import sys
+    if "pdal" not in sys.modules: import pdal
     if fmt == "GeoTIFF":
-        config = ('[\n\t"' + fpath + '",\n' +
-                  '\n\t{\n\t\t"output_type": "idw"' +
-                  ',\n\t\t"resolution": ' + str(size) +
-                  ',\n\t\t"radius": ' + str(rad) +
-                  ',\n\t\t"power": ' + str(pwr) +
-                  ',\n\t\t"window_size": ' + str(wnd) +
-                  ',\n\t\t"filename": "' + fpath[:-4] +
-                  '_IDW.tif"\n\t}\n]')      
+        if preprocessed == False:
+            config = ('[\n\t"' + fpath + '",\n' +
+                      '\n\t{\n\t\t"output_type": "idw"' +
+                      ',\n\t\t"resolution": ' + str(size) +
+                      ',\n\t\t"radius": ' + str(rad) +
+                      ',\n\t\t"power": ' + str(pwr) +
+                      ',\n\t\t"window_size": ' + str(wnd) +
+                      ',\n\t\t"filename": "' + fpath[:-4] +
+                      '_IDW.tif"\n\t}\n]')
+        else:
+            with open(target_folder + 
+                      "config_preprocess.json", 'r') as file_in:
+                preconfig = file_in.read()
+            config = ('[\n\t"' + fpath + '",\n' + preconfig +
+                      ',\n\t{\n\t\t"output_type": "idw"' +
+                      ',\n\t\t"resolution": ' + str(size) +
+                      ',\n\t\t"radius": ' + str(rad) +
+                      ',\n\t\t"power": ' + str(pwr) +
+                      ',\n\t\t"window_size": ' + str(wnd) +
+                      ',\n\t\t"filename": "' + fpath[:-4] +
+                      '_IDW.tif"\n\t}\n]')
         pipeline = pdal.Pipeline(config); pipeline.execute()
     elif fmt == "ASC": print("ASC format for PDAL-IDW is not supported.")
 
@@ -221,27 +235,37 @@ def ip_worker(mp):
     Runs slightly different workflows depending on the
     desired interpolation method/export format.
     """
-    size, fpath, fname = mp[0], (mp[1] + mp[2])[:-4] + '_gf.las', mp[2]
-    target_folder, method, fmt = mp[1], mp[3], mp[4]
-    idw0, idw1, idw2, idw3 = mp[5], mp[6], mp[7], mp[8] 
-    idw4, idw5, idw6 = mp[9], mp[10], mp[11]
+    preprocessed, size, fpath = mp[0], mp[1], (mp[2] + mp[3])[:-4] + '_gf.las'
+    target_folder, fname, method, fmt = mp[2], mp[3], mp[4], mp[5]
+    idw0, idw1, idw2, idw3 = mp[6], mp[7], mp[8], mp[9] 
+    idw4, idw5, idw6 = mp[10], mp[11], mp[12]
     print("PID {} starting to interpolate file {}".format(os.getpid(), fname))
     start = time()
     if method == 'PDAL-IDW':
-        execute_pdal(target_folder, fpath, size, fmt, idw0, idw1, idw2)
+        execute_pdal(preprocessed, target_folder, fpath, size, fmt,
+                     idw0, idw1, idw2)
         end = time()
         print("PID {} finished interpolation and export.".format(os.getpid()),
           "Time elapsed: {} sec.".format(round(end - start, 2)))
         return
-    gnd_coords, res, origin = prepare(size, fpath)
+    if preprocessed == False:
+        gnd_coords, res, origin = prepare(size, fpath)
+    else:
+        from math import ceil
+        gnd_coords = np.asarray(preprocessed[0].tolist())[:,:3]
+        extents = [[min(gnd_coords[:,0]), max(gnd_coords[:,0])],
+               [min(gnd_coords[:,1]), max(gnd_coords[:,1])]]
+        res = [ceil((extents[0][1] - extents[0][0]) / size),
+               ceil((extents[1][1] - extents[1][0]) / size)]
+        origin = [np.mean(extents[0]) - (size / 2) * res[0],
+                  np.mean(extents[1]) - (size / 2) * res[1]]
     if method == 'startin-TINlinear' or method == 'startin-Laplace':
         ras = execute_startin(gnd_coords, res, origin, size, method)
     elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
-     # "code that Khaled has added"
+    # method argument option to run Khaled's experimental CDT code
     elif method == 'CGAL-CDT':
-        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw4) # here I used the strig argument as a path to BAG polygone dataset cause
-        # until here                                                                    I didn't want to mess with the code.
+        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw4)
     elif method == 'IDWquad':
         ras = execute_idwquad(gnd_coords, res, origin, size,
                               idw0, idw1, idw2, idw3, idw4, idw5, idw6)
@@ -269,13 +293,21 @@ def ip_worker(mp):
     print("PID {} finished exporting.".format(os.getpid()),
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
 
-def start_pool(target_folder, size = 1, method = "startin-Laplace",
-               fmt = "GeoTIFF", idw0 = 5, idw1 = 2, idw2 = 0,
-               idw3 = 2, idw4 = "radial", idw5 = 0.2, idw6 = 3):
+def start_pool(target_folder, preprocess = False, size = 1,
+               method = "startin-Laplace", fmt = "GeoTIFF",
+               idw0 = 5, idw1 = 2, idw2 = 0, idw3 = 2,
+               idw4 = "radial", idw5 = 0.2, idw6 = 3):
     """Assembles and executes the multiprocessing pool.
     The interpolation variants/export formats are handled
     by the worker function (ip_worker(mapped)).
     """
+    preprocess, preprocessed = bool(preprocess), False
+    if preprocess == True and method == "PDAL-IDW":
+        preprocessed = True
+    elif preprocess == True:
+        print("\nRunning pre-processing pool before interpolating.")
+        from gf_processing import start_pool as gf_pool
+        preprocessed = gf_pool(False, target_folder, "", "preprocess")
     with open(target_folder + "fnames.txt", 'r') as file_in:
         fnames = file_in.readlines()
     cores = cpu_count()
@@ -287,13 +319,21 @@ def start_pool(target_folder, size = 1, method = "startin-Laplace",
               "cores should be run concurrently.\nYou are starting " +
               str(len(fnames)) + " processes on " + str(cores) + " cores.\n")
     elif len(fnames) == 0:
-        print("Error: No file names were read. Returning."); return
+        print("Error: No file names were input. Returning."); return
     processno = len(fnames)
     pre_map = []
-    for i in range(processno):
-        pre_map.append([float(size), target_folder, fnames[i].strip("\n"),
-                        method, fmt, float(idw0), float(idw1), float(idw2),
-                        float(idw3), idw4, float(idw5), float(idw6)])
+    if preprocess == True and method != "PDAL-IDW":
+        for i in range(processno):
+            pre_map.append([preprocessed[i], float(size), target_folder,
+                            fnames[i].strip("\n"), method, fmt,
+                            float(idw0), float(idw1), float(idw2),
+                            float(idw3), idw4, float(idw5), float(idw6)])        
+    else:
+        for i in range(processno):
+            pre_map.append([preprocessed, float(size), target_folder,
+                            fnames[i].strip("\n"), method, fmt,
+                            float(idw0), float(idw1), float(idw2),
+                            float(idw3), idw4, float(idw5), float(idw6)])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
     p.close(); p.join()

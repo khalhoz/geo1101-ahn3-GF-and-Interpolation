@@ -1,5 +1,5 @@
 ### MULTIPROCESSING POOL-BASED PDAL GROUND FILTERING CODE ###
-
+import numpy as np
 import os
 from time import time
 from multiprocessing import Pool, cpu_count
@@ -26,9 +26,12 @@ def worker(mapped):
     """
     print("PID {} starting to ground filter file {}".format(
         os.getpid(), mapped[2]))
-    config, fpath, tag = mapped[0], mapped[1] + mapped[2], mapped[3]
-    config = ('[\n\t"' + fpath + '",\n' + config +
-              '\n\t"' + fpath[:-4] + '_' + tag + '.las"\n]')
+    config, fpath, write = mapped[0], mapped[1] + mapped[2], mapped[3]
+    if write == True:
+        tag = mapped[4]
+        config = ('[\n\t"' + fpath + '",\n' + config +
+                  '\n\t"' + fpath[:-4] + '_' + tag + '.las"\n]')
+    else: config = ('[\n\t"' + fpath + '",\n' + config + '\n]')
     pipeline = pdal.Pipeline(config)
     start = time()
     pipeline.execute()
@@ -40,7 +43,7 @@ def worker(mapped):
     arrays = pipeline.arrays
     return log, metadata, arrays
 
-def start_pool(target_folder, tag = "gf", json = ""):
+def start_pool(write, target_folder, tag = "gf", json = ""):
     """Assembles and executes the multiprocessing pool and
     merges the return values (logs, metadata, data arrays).
     It currently writes the logs and metadata to disk and
@@ -54,9 +57,10 @@ def start_pool(target_folder, tag = "gf", json = ""):
     the ground filtering processes completed as part of the
     multiprocessing pool.
     """
+    if json != "": json = "_" + json
     config, fnames = initialise(target_folder, json)
     cores = cpu_count()
-    print("\nStarting interpolation pool of processes on the {}".format(
+    print("\nStarting GF/preprocessing pool of processes on the {}".format(
         cores) + " logical cores found in this PC.\n")
     if cores < len(fnames):
         print("Warning: more processes in pool than processor cores.\n" +
@@ -69,7 +73,7 @@ def start_pool(target_folder, tag = "gf", json = ""):
     pre_map = []
     for i in range(processno):
         fnames[i] = fnames[i].strip("\n")
-        pre_map.append([config, target_folder, fnames[i], tag])
+        pre_map.append([config, target_folder, fnames[i], bool(write), tag])
     p = Pool(processes = processno)
     out = p.map(worker, pre_map)
     logs_gf, meta_gf, arrays_gf = [], [], []
@@ -80,12 +84,12 @@ def start_pool(target_folder, tag = "gf", json = ""):
     p.close(); p.join()
     print("\nAll workers have returned. Writing logs and metadata.")
     # The logs appear to be empty. I don't know whether this is
-    # because pdal does not use these logs in its current version,
+    # because the current version of pdal does not use these logs,
     # or because something needs to be configured manually.
-    # See if you can figure this out!
     for fname, log, meta in zip(fnames, logs_gf, meta_gf):
         with open(target_folder + fname[:-4] + "_meta.json", "w") as file_out:
             file_out.write(meta)
         with open(target_folder + fname[:-4] + "_log.txt", "w") as file_out:
             file_out.write(log)
+    return arrays_gf
     print("Success.")

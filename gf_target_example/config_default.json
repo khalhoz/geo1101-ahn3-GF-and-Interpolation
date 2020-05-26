@@ -19,4 +19,4 @@
 	{
 		"type":"filters.range",
 		"limits":"Classification[2:2]"
-	},
+	}
