@@ -74,12 +74,13 @@ def execute_cgal(pts, res, origin, size):
 ### Khaled's experimental CDT interpolation code
 def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     """Performs TIN-interpolation using CGAL CDT (Constrained_Delaunay_triangulation)
-    first creates CDT, then add constraints to it derived from a jeojson file (BAG dataset polygones) 
+    first creates CDT, then add constraints to it derived from a ".jeojson" file (BAG dataset polygones) 
     using fiona. second it reads PC from las file and removes any potential 
     duplicates in the points (this piece of code is borrowed from execute_cgal function). 
-    Then it feeds the points into the CDT. also dict of the z values is created 
-    (P.S constrained points do not have z value in the dictioinary)
-    now  still to be implemented: the actual interpolation code (our own code).
+    Then it feeds the points into the CDT. a dict of the z values is created 
+    (P.S constrained points do not have z value in the dictioinary). 
+    then implemented own TIN-interpolation code. It handles if the vertecies are all constraints, 
+    one of them is constrained, two of them are constrained or all are not constrained
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
