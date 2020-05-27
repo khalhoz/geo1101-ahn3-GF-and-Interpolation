@@ -74,7 +74,7 @@ def execute_cgal(pts, res, origin, size):
 ### Khaled's experimental CDT interpolation code
 def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     """Performs TIN-interpolation using CGAL CDT (Constrained_Delaunay_triangulation)
-    first creates CDT, then add constraints to it derived from a jeojson file 
+    first creates CDT, then add constraints to it derived from a jeojson file (BAG dataset polygones) 
     using fiona. second it reads PC from las file and removes any potential 
     duplicates in the points (this piece of code is borrowed from execute_cgal function). 
     Then it feeds the points into the CDT. also dict of the z values is created 
@@ -83,16 +83,14 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
-    #from CGAL.CGAL_Mesh_2 import Delaunay_mesh_size_criteria_2
-    #from CGAL import CGAL_Mesh_2
     import fiona 
     import shapely.geometry as sg
-    #import matplotlib.pyplot as plt
+    
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
     footprints = fiona.open(bag_Poly)
     for i in range (len(footprints)): #len(footprints)
-        buil_Poly = sg.shape(footprints[i]["geometry"]) 
-        constraints = []
+        buil_Poly      = sg.shape(footprints[i]["geometry"]) 
+        constraints    = []
         for xy_ in buil_Poly.exterior.coords[:-1]:
             const1 = cdt.insert(Point_2(xy_[0], xy_[1]))
             constraints.append(const1)
@@ -109,18 +107,66 @@ def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
                                                 axis = 0), 1))
     deduped = sorted_data[row_mask]
     cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
-    zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2])) #dictionary for z values. Caution: z values of constrained are not added
-    for pt in cpts[:40000]: cdt.insert(pt)     # here all points shoudl be added, just for coding only few points are used
+    #dictionary for z values. Caution: z values of constrained are not added
+    zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2]))
+
+    def area(a, b, c):                                           
+        import math
+        side1 = math.sqrt((a[0]- b[0])**2 + (a[1]- b[1])**2 )
+        side2 = math.sqrt((a[0]- c[0])**2 + (a[1]- c[1])**2 )
+        side3 = math.sqrt((c[0]- b[0])**2 + (c[1]- b[1])**2 )
+        sp_pa = (side1 +side2 +side3)*0.5
+        return math.sqrt(sp_pa*(sp_pa-side1)*(sp_pa-side2)*(sp_pa-side3))
+
+    for pt in cpts: cdt.insert(pt)  
+    ras = np.zeros([res[1], res[0]])
+    yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
             trian = cdt.locate ( Point_2 (x, y))
-            print ((trian.vertex(2).point ()))
-            if (trian.vertex(2).point().x(), trian.vertex(2).point().y()) in zs:
-                print (zs[(trian.vertex(2).point().x(), trian.vertex(2).point().y())])
-
-    print (cpts[0], len (cpts))
+            v1 = trian.vertex(0).point().x(), trian.vertex(0).point().y()
+            v2 = trian.vertex(1).point().x(), trian.vertex(1).point().y()
+            v3 = trian.vertex(2).point().x(), trian.vertex(2).point().y()
+            vs = [v1, v2, v3]
+            areAll = area(v1, v2, v3)
+            w1 = area((x, y), v2, v3)/areAll
+            w2 = area((x, y), v1, v3)/areAll
+            w3 = area((x, y), v2, v1)/areAll
+            # making sure the middle point doesn't coincide with one of the PC 
+            if (x,y) == v1:
+                if v1 in zs: ras[yi, xi] = zs[v1]
+            elif (x,y) == v2:
+                if v2 in zs: ras[yi, xi] = zs[v2]
+            elif (x,y) == v3:
+                if v3 in zs: ras[yi, xi] = zs[v3]
+            else:   # z_check to check how many vertices are constraind, otherwise it has zs
+                Z_check = []
+                checker = 0
+                for ver in vs: 
+                    if ver in zs: 
+                        Z_check.append(zs[ver])
+                        checker +=1 
+                    else:
+                        Z_check.append(False)
+                # assign weight 
+                if checker == 0: ras[yi, xi] = -9999
+                elif checker == 1:
+                    for z_c in Z_check:
+                        if z_c != False: ras[yi, xi] = z_c
+                elif checker == 3:
+                    z_final = Z_check[0]*w1 +Z_check[1]*w2 +Z_check[2]*w3
+                    ras[yi, xi] = z_final
+                else:
+                    z_final = 0
+                    for z_c in Z_check:
+                        if z_c != False: z_final += z_c*0.5
+                    ras[yi, xi] = z_final
+            xi += 1
+        yi += 1
+    
     print ("Number of vertices: ", cdt.number_of_vertices())
-
+    return ras
 def execute_pdal(preprocessed, target_folder, fpath, size, fmt, rad, pwr, wnd):
     """Sets up a PDAL pipeline that reads a ground filtered LAS
     file, and writes it via GDAL. The GDAL writer has interpolation
