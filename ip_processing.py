@@ -83,6 +83,11 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
     vertices in the facet are constraints.
     It then interpolates (manually, using our code) using TIN-
     linear interpolation via the dictionary-based attribute mapping.
+    Extremely long or invalid polygons may mess up the area calculation
+    and trigger an exception. Most of these are handled and the failed
+    pixels are then re-interpolating using their neighbouring pixels
+    afterwards. In some extreme cases however, the calculated side
+    lengths may be so big that they can crash the program.
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
