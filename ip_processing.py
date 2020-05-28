@@ -93,12 +93,16 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
         side2 = np.sqrt((a[0] - c[0])**2 + (a[1] - c[1])**2)
         side3 = np.sqrt((c[0] - b[0])**2 + (c[1] - b[1])**2)
         sp_pa = (side1 + side2 + side3) * 0.5
+        if (sp_pa <= 0 or
+            sp_pa - side1 <= 0 or
+            sp_pa - side1 <= 0 or
+            sp_pa - side1 <= 0): return False
         return np.sqrt(sp_pa * (sp_pa - side1) *
                        (sp_pa - side2) * (sp_pa - side3))
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
     fps = fiona.open(poly_fpath)
     sub = fps.items(bbox = (origin[0], origin[0] + res[0] * size,
-                                 origin[1], origin[1] + res[1] * size))
+                            origin[1], origin[1] + res[1] * size))
     for fp in sub:
         constraints, poly = [], sg.shape(fp[1]["geometry"])
         for vx in poly.exterior.coords[:-1]:
@@ -116,12 +120,13 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
         xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-            tr = cdt.locate (Point_2 (x, y))
+            tr = cdt.locate (Point_2(x, y))
             v1 = tr.vertex(0).point().x(), tr.vertex(0).point().y()
             v2 = tr.vertex(1).point().x(), tr.vertex(1).point().y()
             v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
             vxs = [v1, v2, v3]
             tr_area = area(v1, v2, v3)
+            if tr_area == False: continue
             ws = [area((x, y), v2, v3) / tr_area,
                   area((x, y), v1, v3) / tr_area,
                   area((x, y), v2, v1) / tr_area]
@@ -134,7 +139,7 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
                 for i in range(3): valid_vxs[i] = zs.get(vxs[i])
                 if None not in valid_vxs:
                     ras[yi, xi] = (valid_vxs[0] * ws[0] +
-                                   valid_vxs[1] * ws[1] + 
+                                   valid_vxs[1] * ws[1] +
                                    valid_vxs[2] * ws[2])
                 elif valid_vxs.count(None) == 1:
                     for i in range(3):
@@ -145,6 +150,17 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
                         if vx != None:
                             ras[yi, xi] = vx; break
                 else: ras[yi, xi] = -9999
+            xi += 1
+        yi += 1
+    yi = 0
+    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
+        xi = 0
+        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
+            if np.isnan(ras[yi, xi]) == True:
+                ras[yi, xi] = np.mean([ras[yi - 1, xi],
+                                       ras[yi, xi - 1],
+                                       ras[yi, xi + 1],
+                                       ras[yi + 1, xi]])
             xi += 1
         yi += 1
     return ras
