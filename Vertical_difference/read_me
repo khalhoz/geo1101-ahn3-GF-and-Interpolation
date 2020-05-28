@@ -1,0 +1,9 @@
+The file must be in the same folder with 5 other folders:
+AHN - with the 5 raw point clouds
+IDW - with the 5 .tif resuts of IDW
+Laplace - with the 5 .tif resuts of Laplace
+NN - with the 5 .tif resuts of NN
+TINlinear - with the 5 .tif resuts of TINlinear
+
+Can be downloaded here with an older version of the script:
+https://stack.dejong.cc/s/EYzb8fu6p2diEeZ
