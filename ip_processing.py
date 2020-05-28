@@ -120,8 +120,6 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
             v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
             vxs = [v1, v2, v3]
             tr_area = area(v1, v2, v3)
-            if tr_area == False:
-                ras[yi, xi] = -9999; continue
             ws = [area((x, y), v2, v3) / tr_area,
                   area((x, y), v1, v3) / tr_area,
                   area((x, y), v2, v1) / tr_area]

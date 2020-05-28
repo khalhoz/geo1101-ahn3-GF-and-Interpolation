@@ -110,7 +110,7 @@ Or for the PDAL-IDW algorithm (using pre-processing) with radius and power value
 
 `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ True 0.5 PDAL-IDW GeoTIFF 10 2`
 
-As indicated above, for CGAL-CDT the sixth parameter is a file path too. For example:
+As indicated above, for CGAL-CDT the sixth argument is a file path too. For example:
 
 `python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ False 1.5 CGAL-CDT GeoTIFF C:/Users/geo-geek/some_folder/killer_polygons.shp`
 
