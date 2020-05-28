@@ -30,8 +30,9 @@ def worker(mapped):
     if write == True:
         tag = mapped[4]
         config = ('[\n\t"' + fpath + '",\n' + config +
-                  '\n\t"' + fpath[:-4] + '_' + tag + '.las"\n]')
+                  ',\n\t"' + fpath[:-4] + '_' + tag + '.las"\n]')
     else: config = ('[\n\t"' + fpath + '",\n' + config + '\n]')
+    print(config)
     pipeline = pdal.Pipeline(config)
     start = time()
     pipeline.execute()
