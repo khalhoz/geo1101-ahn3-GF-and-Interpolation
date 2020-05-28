@@ -44,11 +44,9 @@ def execute_cgal(pts, res, origin, size):
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Triangulation_2 import Delaunay_triangulation_2
     from CGAL.CGAL_Interpolation import natural_neighbor_coordinates_2
-    sorted_idx = np.lexsort(pts.T)
-    sorted_data = pts[sorted_idx,:]
-    row_mask = np.append([True], np.any(np.diff(sorted_data[:,:2],
-                                                axis = 0), 1))
-    deduped = sorted_data[row_mask]
+    s_idx = np.lexsort(pts.T); s_data = pts[s_idx,:]
+    mask = np.append([True], np.any(np.diff(s_data[:,:2], axis = 0), 1))
+    deduped = s_data[mask]
     cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
     zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2]))
     tin = Delaunay_triangulation_2()
@@ -71,104 +69,87 @@ def execute_cgal(pts, res, origin, size):
         yi += 1
     return ras
 
-### Khaled's experimental CDT interpolation code
-def execute_cgal_CDT(pts, res, origin, size, bag_Poly):
-    """Performs TIN-interpolation using CGAL CDT (Constrained_Delaunay_triangulation)
-    first creates CDT, then add constraints to it derived from a ".jeojson" file (BAG dataset polygones) 
-    using fiona. second it reads PC from las file and removes any potential 
-    duplicates in the points (this piece of code is borrowed from execute_cgal function). 
-    Then it feeds the points into the CDT. a dict of the z values is created 
-    (P.S constrained points do not have z value in the dictioinary). 
-    then implemented own TIN-interpolation code. It handles if the vertecies are all constraints, 
-    one of them is constrained, two of them are constrained or all are not constrained
+def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
+    """Performs CGAL-CDT on the input points.
+    First it removes any potential duplicates from the input points,
+    as these would cause issues with the dictionary-based attribute mapping.
+    Then, it creates CGAL Point_2 object from these points,
+    inserts them into a CGAL Constrained_Delaunay_triangulation_2,
+    and then inserts the constraints from shapefiles.
+    The constraints do not have elevation values associated.
+    Interpolation happens if there are at least two non-constraint
+    vertices in a given facet. Otherwise, it either yields the elevation
+    of the only non-constraint vertex, or the no-data value is all
+    vertices in the facet are constraints.
+    It then interpolates (manually, using our code) using TIN-
+    linear interpolation via the dictionary-based attribute mapping.
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
-    import fiona 
+    import fiona
     import shapely.geometry as sg
-    
+    def area(a, b, c):
+        side1 = np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+        side2 = np.sqrt((a[0] - c[0])**2 + (a[1] - c[1])**2)
+        side3 = np.sqrt((c[0] - b[0])**2 + (c[1] - b[1])**2)
+        sp_pa = (side1 + side2 + side3) * 0.5
+        return np.sqrt(sp_pa * (sp_pa - side1) *
+                       (sp_pa - side2) * (sp_pa - side3))
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
-    footprints = fiona.open(bag_Poly)
-    for i in range (len(footprints)): #len(footprints)
-        buil_Poly      = sg.shape(footprints[i]["geometry"]) 
-        constraints    = []
-        for xy_ in buil_Poly.exterior.coords[:-1]:
-            const1 = cdt.insert(Point_2(xy_[0], xy_[1]))
-            constraints.append(const1)
-        cter = 1
-        for const in constraints:
-            if const != constraints[-1]:
-                cdt.insert_constraint(const, constraints[cter])
-                cter += 1
-            else:
-                cdt.insert_constraint(const, constraints[0])
-    sorted_idx = np.lexsort(pts.T)
-    sorted_data = pts[sorted_idx,:]
-    row_mask = np.append([True], np.any(np.diff(sorted_data[:,:2],
-                                                axis = 0), 1))
-    deduped = sorted_data[row_mask]
+    footprints = fiona.open(poly_fpath)
+    for fp in footprints:
+        constraints, poly = [], sg.shape(fp["geometry"])
+        for vx in poly.exterior.coords[:-1]:
+            constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+        for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
+            cdt.insert_constraint(vx0, vx1)
+    s_idx = np.lexsort(pts.T); s_data = pts[s_idx,:]
+    mask = np.append([True], np.any(np.diff(s_data[:,:2], axis = 0), 1))
+    deduped = s_data[mask]
     cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
-    #dictionary for z values. Caution: z values of constrained are not added
     zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2]))
-
-    def area(a, b, c):                                           
-        import math
-        side1 = math.sqrt((a[0]- b[0])**2 + (a[1]- b[1])**2 )
-        side2 = math.sqrt((a[0]- c[0])**2 + (a[1]- c[1])**2 )
-        side3 = math.sqrt((c[0]- b[0])**2 + (c[1]- b[1])**2 )
-        sp_pa = (side1 +side2 +side3)*0.5
-        return math.sqrt(sp_pa*(sp_pa-side1)*(sp_pa-side2)*(sp_pa-side3))
-
     for pt in cpts: cdt.insert(pt)  
     ras = np.zeros([res[1], res[0]])
     yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
         xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-            trian = cdt.locate ( Point_2 (x, y))
-            v1 = trian.vertex(0).point().x(), trian.vertex(0).point().y()
-            v2 = trian.vertex(1).point().x(), trian.vertex(1).point().y()
-            v3 = trian.vertex(2).point().x(), trian.vertex(2).point().y()
-            vs = [v1, v2, v3]
-            areAll = area(v1, v2, v3)
-            w1 = area((x, y), v2, v3)/areAll
-            w2 = area((x, y), v1, v3)/areAll
-            w3 = area((x, y), v2, v1)/areAll
-            # making sure the middle point doesn't coincide with one of the PC 
-            if (x,y) == v1:
-                if v1 in zs: ras[yi, xi] = zs[v1]
-            elif (x,y) == v2:
-                if v2 in zs: ras[yi, xi] = zs[v2]
-            elif (x,y) == v3:
-                if v3 in zs: ras[yi, xi] = zs[v3]
-            else:   # z_check to check how many vertices are constraind, otherwise it has zs
-                Z_check = []
-                checker = 0
-                for ver in vs: 
-                    if ver in zs: 
-                        Z_check.append(zs[ver])
-                        checker +=1 
-                    else:
-                        Z_check.append(False)
-                # assign weight 
-                if checker == 0: ras[yi, xi] = -9999
-                elif checker == 1:
-                    for z_c in Z_check:
-                        if z_c != False: ras[yi, xi] = z_c
-                elif checker == 3:
-                    z_final = Z_check[0]*w1 +Z_check[1]*w2 +Z_check[2]*w3
-                    ras[yi, xi] = z_final
-                else:
-                    z_final = 0
-                    for z_c in Z_check:
-                        if z_c != False: z_final += z_c*0.5
-                    ras[yi, xi] = z_final
+            tr = cdt.locate (Point_2 (x, y))
+            v1 = tr.vertex(0).point().x(), tr.vertex(0).point().y()
+            v2 = tr.vertex(1).point().x(), tr.vertex(1).point().y()
+            v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
+            vxs = [v1, v2, v3]
+            tr_area = area(v1, v2, v3)
+            if tr_area == False:
+                ras[yi, xi] = -9999; continue
+            ws = [area((x, y), v2, v3) / tr_area,
+                  area((x, y), v1, v3) / tr_area,
+                  area((x, y), v2, v1) / tr_area]
+            if (x, y) in vxs:
+                val = zs.get((x, y))
+                if val != None: ras[yi, xi] = val
+                else: ras[yi, xi] = -9999
+            else:
+                valid_vxs = [None, None, None]
+                for i in range(3): valid_vxs[i] = zs.get(vxs[i])
+                if None not in valid_vxs:
+                    ras[yi, xi] = (valid_vxs[0] * ws[0] +
+                                   valid_vxs[1] * ws[1] + 
+                                   valid_vxs[2] * ws[2])
+                elif valid_vxs.count(None) == 1:
+                    for i in range(3):
+                        if valid_vxs[i] != None:
+                            ras[yi, xi] += valid_vxs[i] * ws[i]
+                elif valid_vxs.count(None) == 2:
+                    for vx in valid_vxs:
+                        if vx != None:
+                            ras[yi, xi] = vx; break
+                else: ras[yi, xi] = -9999
             xi += 1
         yi += 1
-    
-    print ("Number of vertices: ", cdt.number_of_vertices())
     return ras
-def execute_pdal(preprocessed, target_folder, fpath, size, fmt, rad, pwr, wnd):
+
+def execute_pdal(preproc, target_folder, fpath, size, fmt, rad, pwr, wnd):
     """Sets up a PDAL pipeline that reads a ground filtered LAS
     file, and writes it via GDAL. The GDAL writer has interpolation
     options, exposing the radius, power and a fallback kernel width
@@ -177,7 +158,7 @@ def execute_pdal(preprocessed, target_folder, fpath, size, fmt, rad, pwr, wnd):
     import sys
     if "pdal" not in sys.modules: import pdal
     if fmt == "GeoTIFF":
-        if preprocessed == False:
+        if preproc == False:
             config = ('[\n\t"' + fpath + '",\n' +
                       '\n\t{\n\t\t"output_type": "idw"' +
                       ',\n\t\t"resolution": ' + str(size) +
@@ -298,13 +279,13 @@ def ip_worker(mp):
     """
     preprocessed, size, fpath = mp[0], mp[1], (mp[2] + mp[3])[:-4] + '_gf.las'
     target_folder, fname, method, fmt = mp[2], mp[3], mp[4], mp[5]
-    idw0, idw1, idw2, idw3 = mp[6], mp[7], mp[8], mp[9] 
+    idw0_polyfpath, idw1, idw2, idw3 = mp[6], mp[7], mp[8], mp[9] 
     idw4, idw5, idw6 = mp[10], mp[11], mp[12]
     print("PID {} starting to interpolate file {}".format(os.getpid(), fname))
     start = time()
     if method == 'PDAL-IDW':
         execute_pdal(preprocessed, target_folder, fpath, size, fmt,
-                     idw0, idw1, idw2)
+                     idw0_polyfpath, idw1, idw2)
         end = time()
         print("PID {} finished interpolation and export.".format(os.getpid()),
           "Time elapsed: {} sec.".format(round(end - start, 2)))
@@ -324,12 +305,12 @@ def ip_worker(mp):
         ras = execute_startin(gnd_coords, res, origin, size, method)
     elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
-    # method argument option to run Khaled's experimental CDT code
     elif method == 'CGAL-CDT':
-        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw4)
+        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw0_polyfpath)
     elif method == 'IDWquad':
         ras = execute_idwquad(gnd_coords, res, origin, size,
-                              idw0, idw1, idw2, idw3, idw4, idw5, idw6)
+                              idw0_polyfpath, idw1, idw2, idw3,
+                              idw4, idw5, idw6)
     end = time()
     print("PID {} finished interpolation.".format(os.getpid()),
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
@@ -340,6 +321,8 @@ def ip_worker(mp):
         write_geotiff(ras, origin, size, fpath[:-4] + '_Laplace.tif')
     if method == 'CGAL-NN' and fmt == 'GeoTIFF':
         write_geotiff(ras, origin, size, fpath[:-4] + '_NN.tif')
+    if method == 'CGAL-CDT' and fmt == 'GeoTIFF':
+        write_geotiff(ras, origin, size, fpath[:-4] + '_TINlinearCDT.tif')
     if method == 'IDWquad' and fmt == 'GeoTIFF':
         write_geotiff(ras, origin, size, fpath[:-4] + '_IDWquad.tif')
     if method == 'startin-TINlinear' and fmt == 'ASC':
@@ -348,6 +331,8 @@ def ip_worker(mp):
         write_asc(res, origin, size, ras, fpath[:-4] + '_Laplace.asc')
     if method == 'CGAL-NN' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_NN.asc')
+    if method == 'CGAL-CDT' and fmt == 'ASC':
+        write_asc(res, origin, size, ras, fpath[:-4] + '_TINlinearCDT.asc')
     if method == 'IDWquad' and fmt == 'ASC':
         write_asc(res, origin, size, ras, fpath[:-4] + '_IDWquad.asc')
     end = time()
@@ -355,21 +340,23 @@ def ip_worker(mp):
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
 
 def start_pool(target_folder, preprocess = False, size = 1,
-               method = "startin-Laplace", fmt = "GeoTIFF",
-               idw0 = 5, idw1 = 2, idw2 = 0, idw3 = 2,
-               idw4 = "radial", idw5 = 0.2, idw6 = 3):
+               method = 'startin-Laplace', fmt = 'GeoTIFF',
+               idw0_polyfpath = 5, idw1 = 2, idw2 = 0, idw3 = 2,
+               idw4 = 'radial', idw5 = 0.2, idw6 = 3):
     """Assembles and executes the multiprocessing pool.
     The interpolation variants/export formats are handled
     by the worker function (ip_worker(mapped)).
     """
-    preprocess, preprocessed = bool(preprocess), False
-    if preprocess == True and method == "PDAL-IDW":
+    if preprocess == "False": preprocess = False
+    else: preprocess = True
+    preprocessed = False
+    if preprocess == True and method == 'PDAL-IDW':
         preprocessed = True
     elif preprocess == True:
         print("\nRunning pre-processing pool before interpolating.")
         from gf_processing import start_pool as gf_pool
-        preprocessed = gf_pool(False, target_folder, "", "preprocess")
-    with open(target_folder + "fnames.txt", 'r') as file_in:
+        preprocessed = gf_pool(False, target_folder, '', 'preprocess')
+    with open(target_folder + 'fnames.txt', 'r') as file_in:
         fnames = file_in.readlines()
     cores = cpu_count()
     print("\nStarting interpolation pool of processes on the {}".format(
@@ -383,17 +370,18 @@ def start_pool(target_folder, preprocess = False, size = 1,
         print("Error: No file names were input. Returning."); return
     processno = len(fnames)
     pre_map = []
-    if preprocess == True and method != "PDAL-IDW":
+    if method != 'CGAL-CDT': idw0_polyfpath = float(idw0_polyfpath)
+    if preprocess == True and method != 'PDAL-IDW':
         for i in range(processno):
             pre_map.append([preprocessed[i], float(size), target_folder,
-                            fnames[i].strip("\n"), method, fmt,
-                            float(idw0), float(idw1), float(idw2),
+                            fnames[i].strip('\n'), method, fmt,
+                            idw0_polyfpath, float(idw1), float(idw2),
                             float(idw3), idw4, float(idw5), float(idw6)])        
     else:
         for i in range(processno):
             pre_map.append([preprocessed, float(size), target_folder,
-                            fnames[i].strip("\n"), method, fmt,
-                            float(idw0), float(idw1), float(idw2),
+                            fnames[i].strip('\n'), method, fmt,
+                            idw0_polyfpath, float(idw1), float(idw2),
                             float(idw3), idw4, float(idw5), float(idw6)])
     p = Pool(processes = processno)
     p.map(ip_worker, pre_map)
