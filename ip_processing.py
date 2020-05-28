@@ -162,10 +162,13 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
         xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
             if np.isnan(ras[yi, xi]) == True:
-                ras[yi, xi] = np.mean([ras[yi - 1, xi],
-                                       ras[yi, xi - 1],
-                                       ras[yi, xi + 1],
-                                       ras[yi + 1, xi]])
+                val, vcount = 0, 0
+                for yj in range(3):
+                    for xj in range(3):
+                        if (ras[yi + yj - 1, xi + xj - 1] != -9999 and
+                            np.isnan(ras[yi + yj - 1, xi + xj - 1]) == False):
+                            val += ras[yi + yj - 1, xi + xj - 1]; vcount += 1
+                if vcount >= 4: ras[yi, xi] = val
             xi += 1
         yi += 1
     return ras
