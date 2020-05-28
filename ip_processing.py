@@ -96,9 +96,11 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
         return np.sqrt(sp_pa * (sp_pa - side1) *
                        (sp_pa - side2) * (sp_pa - side3))
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
-    footprints = fiona.open(poly_fpath)
-    for fp in footprints:
-        constraints, poly = [], sg.shape(fp["geometry"])
+    fps = fiona.open(poly_fpath)
+    sub = fps.items(bbox = (origin[0], origin[0] + res[0] * size,
+                                 origin[1], origin[1] + res[1] * size))
+    for fp in sub:
+        constraints, poly = [], sg.shape(fp[1]["geometry"])
         for vx in poly.exterior.coords[:-1]:
             constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
         for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
