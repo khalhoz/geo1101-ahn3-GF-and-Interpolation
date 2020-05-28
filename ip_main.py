@@ -21,10 +21,11 @@ The arguments should be specified in this order:
     - output format, one of:
         - ASC
         - [default] GeoTIFF
-    - IDW radius (for PDAL-IDW)
-      // STARTING IDW radius/number of neighbours to query (for IDWquad)
+    - IDW radius (for PDAL-IDW) //
+      // STARTING IDW radius/number of neighbours to query (for IDWquad) //
+      // File path to input polygons for CDT
     - IDW power (for PDAL-IDW and IDWquad)
-    - IDW fallback kernel width (for PDAL-IDW)
+    - IDW fallback kernel width (for PDAL-IDW) //
       // MINIMUM number of points per quadrant (for IDWquad)
     - radius/number of neighbours INCREMENT value (for IDWquad)
     - IDWquad method, one of:

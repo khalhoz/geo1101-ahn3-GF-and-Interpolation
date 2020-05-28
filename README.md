@@ -87,7 +87,7 @@ The intended workflow is:
 	5. output format, one of:
         * ASC
         * GeoTIFF _(default)_
-    6. IDW argument 1 / File path for input polygons for CDT:
+    6. IDW argument 1 / File path to input polygons for CDT:
 		* _If using PDAL-IDW:_ IDW interpolation radius in metres
 		* _If using IDWquad:_ The _starting_ radius/number of neighbours _k_ to query
 		* _If using CGAL-CDT:_ A file path to a fiona-compatible vector file to be used for setting up the CDT constraints.
