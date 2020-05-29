@@ -23,23 +23,21 @@ def read_PC_Data (directory):
 
 def calculate_differences(pc_pts, raster_array, raster_cell_size, raster_bbox, raster_width, raster_height):
     verticle_differences = np.zeros((raster_height, raster_width))
+    for col in range(raster_width):
+        for row in range(raster_height):
+            if raster_array[row][col] == -9999:
+                verticle_differences[row, col] = -9999
+            
     xmin = raster_bbox[0]
     ymin = raster_bbox[1]
     sizex = raster_cell_size[0]
     sizey = raster_cell_size[1]
 
     for pt in pc_pts:
-        col = int((pt[0]-xmin)/sizex)
-        row = int((pt[1]-ymin)/sizey)
-        if raster_array[row][col] == -9999: z = pt[2]
-        else: z = pt[2]-raster_array[row][col]
-        verticle_differences[row][col] += z
-        
-    for col in range(raster_width):
-        for row in range(raster_height):
-            if verticle_differences[row][col] == 0 and raster_array[row][col] != -9999:
-                verticle_differences[row][col] = raster_array[row][col]
-
+        colR = int((pt[0]-xmin)/sizex)
+        rowR = int((pt[1]-ymin)/sizey)
+        if raster_array[rowR][colR] != -9999:
+            verticle_differences[rowR][colR] += pt[2]-raster_array[rowR][colR]
     return verticle_differences
 
 
