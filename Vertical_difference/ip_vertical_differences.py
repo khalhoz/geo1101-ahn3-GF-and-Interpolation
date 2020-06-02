@@ -64,7 +64,7 @@ def main(AHN_pc_file):
         for col in range(raster_info[3]):
             for row in range(raster_info[4]):
                     squared_sum += (differences_values[row][col]**2)
-        N = raster_info[3] * raster_info[4]
+        N = (raster_info[3] * raster_info[4]) - np.count_nonzero(differences_values == 0)
         RMSE = math.sqrt(squared_sum/N)
         ff.write("RMSE for " + method + "_" + file_name + " = " + str(RMSE) + "\n")
 
