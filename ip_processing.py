@@ -1,4 +1,7 @@
-### MULTIPROCESSING POOL-BASED INTERPOLATION CODE ###
+### PRE-PROCESSING + INTERPOLATION + POST-PROCESSING SCRIPTS ###
+
+# For the documentation, please visit the repo:
+# https://github.com/khalhoz/geo1101-ahn3-GF-and-Interpolation
 
 import os
 from time import time

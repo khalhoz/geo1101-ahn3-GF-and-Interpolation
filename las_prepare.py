@@ -1,5 +1,8 @@
 ### LAS READING AND RASTER PREPARATION ###
 
+# For the documentation, please visit the repo:
+# https://github.com/khalhoz/geo1101-ahn3-GF-and-Interpolation
+
 import math
 import numpy as np
 from laspy.file import File

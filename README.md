@@ -98,9 +98,9 @@ A key to the CMD call signature of `ip_main.py`:
 2. bool to indicate if you would like pre-processing to be run before interpolation _(the default value is `False`)_
 3. integer to set the post-processing mode, currently these ones are available:
 	* **0** _(default, does not run post-processing)_
-	* **1** _(runs missing pixel value patching only)
-	* **2** _(runs polygon flattening only)
-	* **3** _(runs both patching and polygon flattening)
+	* **1** _(runs missing pixel value patching only)_
+	* **2** _(runs polygon flattening only)_
+	* **3** _(runs both patching and polygon flattening)_
 4. pixel size (in metres) for interpolation _(the default value is 1)_
 5. interpolation method, one of:
 	* startin-TINlinear

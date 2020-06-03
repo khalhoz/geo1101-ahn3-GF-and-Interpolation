@@ -1,7 +1,7 @@
-### MAIN FILE FOR PDAL TESTING ###
+### MAIN FILE FOR GROUND-FILTERING/PRE-PROCESSING TESTING ###
 
-from sys import argv
-from gf_processing import start_pool
+# For the documentation, please visit the repo:
+# https://github.com/khalhoz/geo1101-ahn3-GF-and-Interpolation
 
 """You need to specify the folder in which your LAS files are as a command line argument (target folder).
 The folder needs to contain the config JSON in the right format (see example file), with name "config.json".
@@ -47,6 +47,9 @@ that your config file also has the matching "_pre" tag in its filename.
 #                       threshold and scalar are for)
 #           EDIT: it appears that "last" has been deprecated? Deleted it from config.
 # [step 5]  extracting the point that were classified as ground
+
+from sys import argv
+from gf_processing import start_pool
 
 def main():
     if 2 <= len(argv) <= 4: start_pool(True, *argv[1:])

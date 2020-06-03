@@ -1,10 +1,19 @@
 ### VECTOR FILE IMPORTING AND VECTOR TILING CODE ###
 
+# For the documentation, please visit the repo:
+# https://github.com/khalhoz/geo1101-ahn3-GF-and-Interpolation
+
 from shapely.geometry import shape, Point, LineString, box, Polygon
 from shapely.ops import linemerge, unary_union, polygonize
 import fiona
 
 def vector_prepare(bbox, fpath):
+    """Takes a bounding box and a file path to a vector file.
+    Reads the vector file, finds polygons that are within the
+    bounding box or intersect it. Crops the intersecting geometries
+    to the extents of the bounding box, and returns the contained and
+    cropped geometries.
+    """
     A = Point(bbox[0][0], bbox[1][1])
     B = Point(bbox[0][1], bbox[1][1])
     C = Point(bbox[0][1], bbox[1][0])
