@@ -158,7 +158,7 @@ adjusting the value in the field Symbology --> Band Rendering --> Min.
 
 **Note:** ASC export is not currently supported for the PDAL-IDW algorithm. It also does not yet support post-processing (it does support pre-processing though).
 
-**Another note:** You are advised to configure the IDWradial parametrisation **with performance in mind** when first getting started with IDWquad. Otherwise it might take _veeeeeery long_ to finish.
+**Another note:** You are advised to configure the IDWquad parametrisation **with performance in mind** when first getting started. Otherwise it might take _veeeeeery long_ to finish.
 
 ## More about the IDW algorithms
 
