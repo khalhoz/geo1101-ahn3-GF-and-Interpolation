@@ -64,7 +64,7 @@ in which case you would use:
 
 `python [file_path_to_main] [target_folder] dsm pre`.
 
-## Primary entry point (optional ground filtering/pre-processing + interpolation)
+## Primary entry point (pre-processing + interpolation + post-processing)
 
 `ip_main.py` is intended to serve as the primary entry point to the program. It includes CMD arguments to run pre-processing via `gf_main.py` and post-processing, optionally.
 If you use it to _only_ interpolate pre-processed LAS files you generated using PDAL pipeline entry point, the program will assume that you used the default `_gf.las` tag
