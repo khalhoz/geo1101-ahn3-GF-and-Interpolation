@@ -22,7 +22,7 @@
 * `las_prepare.py` _(reads LAS file and establishes raster dimensions, part of main program)_
 * `Make_tile_vectors.py` _(Lisa's vector tiling program)_
 * `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
-* `vector_prepare.py` _(reads vector file and extracts a vector tile from it, adapted from `Make_tile_vectors.py` and part of main program)_
+* `vector_prepare.py` _(extracts a vector tile from a vector file, adapted from `Make_tile_vectors.py` and part of main program)_
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 constrained Delaunay-based (CDT) TIN-linear and natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code.
@@ -33,15 +33,15 @@ It also includes these post-processing modules so far: flattening the areas of p
 * First release of post-processing. Patching missing pixels and flattening polygon areas works, and needs testing!
 * Re-designed CGAL-CDT. It no longer tries to create empty constraint-holes, instead focusing on performance.
 * Fixed the k-nearest sub-method of IDWquad.
-* Fixed lots of bugs
+* Fixed lots of bugs.
 
 ## Current tasks
 
 I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we aim to skip secondary hole filling altogether by using a TIN-based
 interpolation method. This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and
 will now move on to implementing algorithms. ~~Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body
-shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).~~ This did not work out. :(
-Instead, we are overlaying the input geometries with the raster, estimating polygon elevations by interpolating in the TIN of the pixel centres.
+shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).~~ This did not work out, instead, we are overlaying the
+input geometries with the raster, estimating polygon elevations by interpolating in the TIN of the pixel centres.
 
 Following some further consultation with Jeroen, we will also double-check how well our primary interpolation method interpolates the building gaps. If they look too triangular,
 we might consider trying to flatten them (like water bodies), or using an alternative secondary interpolation mechanism inside of them.
@@ -53,14 +53,16 @@ This is a secondary entry point that only runs a PDAL pipeline. It is intended f
 1. Copy the example configuration files (`config.json`, `fnames.txt`) to your target folder (in which the LAS files are located).
 2. Edit the configuration files.
 	1. Specify the names of the LAS files in `fnames.txt` as shown in the example.
-	2. Modify the pdal pipeline configuration in `config.json`. Fine-tune the parametrisation to work well with the given data set.
+	2. Modify the PDAL pipeline configuration in `config.json` as needed.
 4. Run `gf_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. It takes one command line argument,
 which should be the target folder. An example call in the Windows Anaconda Prompt would be: `python C:/Users/geo-geek/some_folder/gf_main.py C:/Users/geo-geek/target_folder/`
 
 It will deposit the ground filtered tiles as LAS files tagged with `_gf.las` in the target folder.
 You can provide an additional CMD argument to modify the default output tag (which is `_gf`). You don't need the underscore, to export `somefile_dsm.las` for example, you may write
-`python [file_path_to_main] [target_folder] dsm`. You can also provide a tag for the input config file. For example for a pre-processing job you may want to call it `config_pre.json`,
-in which case you would use `python [file_path_to_main] [target_folder] dsm pre`.
+`python [file_path_to_main] [target_folder] dsm`. You can also provide a tag for the input config file. For example, for a pre-processing job you may want to call it `config_pre.json`,
+in which case you would use:
+
+`python [file_path_to_main] [target_folder] dsm pre`.
 
 ## Primary entry point (optional ground filtering/pre-processing + interpolation)
 
