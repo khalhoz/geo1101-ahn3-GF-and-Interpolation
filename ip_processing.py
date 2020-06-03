@@ -4,7 +4,23 @@ import os
 from time import time
 from multiprocessing import Pool, cpu_count
 import numpy as np
-from las_prepare import prepare
+from las_prepare import las_prepare
+from vector_prepare import vector_prepare
+
+def triangle_area(a, b, c):
+    """Computes the area of a triangle with sides a, b, and c.
+    Expects an exception to be raised for problematic area
+    calculations, in which case it returns False to indicate
+    failure.
+    """
+    try:
+        side1 = np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+        side2 = np.sqrt((a[0] - c[0])**2 + (a[1] - c[1])**2)
+        side3 = np.sqrt((c[0] - b[0])**2 + (c[1] - b[1])**2)
+        sp_pa = (side1 + side2 + side3) * 0.5
+        return np.sqrt(sp_pa * (sp_pa - side1) *
+                       (sp_pa - side2) * (sp_pa - side3))
+    except: return False
 
 def execute_startin(pts, res, origin, size, method):
     """Takes the grid parameters and the ground points. Interpolates
@@ -69,7 +85,7 @@ def execute_cgal(pts, res, origin, size):
         yi += 1
     return ras
 
-def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
+def execute_cgal_cdt(pts, res, origin, size, target_folder):
     """Performs CGAL-CDT on the input points.
     First it removes any potential duplicates from the input points,
     as these would cause issues with the dictionary-based attribute mapping.
@@ -84,93 +100,76 @@ def execute_cgal_CDT(pts, res, origin, size, poly_fpath):
     It then interpolates (manually, using our code) using TIN-
     linear interpolation via the dictionary-based attribute mapping.
     Extremely long or invalid polygons may mess up the area calculation
-    and trigger an exception. Most of these are handled and the failed
-    pixels are then re-interpolating using their neighbouring pixels
-    afterwards. In some extreme cases however, the calculated side
-    lengths may be so big that they can crash the program.
+    and trigger an exception. These are caught and result in no-data pixels
+    which are then filled with values using a median kernel.
     """
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
-    import fiona
-    import shapely.geometry as sg
-    def area(a, b, c):
-        side1 = np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-        side2 = np.sqrt((a[0] - c[0])**2 + (a[1] - c[1])**2)
-        side3 = np.sqrt((c[0] - b[0])**2 + (c[1] - b[1])**2)
-        sp_pa = (side1 + side2 + side3) * 0.5
-        if (sp_pa <= 0 or
-            sp_pa - side1 <= 0 or
-            sp_pa - side1 <= 0 or
-            sp_pa - side1 <= 0): return False
-        return np.sqrt(sp_pa * (sp_pa - side1) *
-                       (sp_pa - side2) * (sp_pa - side3))
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
-    fps = fiona.open(poly_fpath)
-    sub = fps.items(bbox = (origin[0], origin[0] + res[0] * size,
-                            origin[1], origin[1] + res[1] * size))
-    for fp in sub:
-        constraints, poly = [], sg.shape(fp[1]["geometry"])
-        for vx in poly.exterior.coords[:-1]:
-            constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
-        for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
-            cdt.insert_constraint(vx0, vx1)
     s_idx = np.lexsort(pts.T); s_data = pts[s_idx,:]
     mask = np.append([True], np.any(np.diff(s_data[:,:2], axis = 0), 1))
     deduped = s_data[mask]
     cpts = list(map(lambda x: Point_2(*x), deduped[:,:2].tolist()))
     zs = dict(zip([tuple(x) for x in deduped[:,:2]], deduped[:,2]))
-    for pt in cpts: cdt.insert(pt)  
+    for pt in cpts: cdt.insert(pt)
+    poly_fpaths = [
+                     'rest_bodies/bbg_rest_of_the_water.shp',
+                     'river_bodies/bbg_only_river_bodies.shp',
+                     'sea_bodies/bbg_sea_and_big_bodies.shp',
+                     #'BAG_NL.geojson'
+                  ]
+    in_vecs = []
+    for fpath in poly_fpaths:
+        vec = vector_prepare([[origin[0], origin[0] + res[0] * size],
+                              [origin[1], origin[1] + res[1] * size]],
+                             target_folder + fpath)
+        if len(vec) != 0: in_vecs.append(vec)
+    def interpolate(pt):
+        tr = cdt.locate(Point_2(pt[0], pt[1]))
+        v1 = tr.vertex(0).point().x(), tr.vertex(0).point().y()
+        v2 = tr.vertex(1).point().x(), tr.vertex(1).point().y()
+        v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
+        vxs = [v1, v2, v3]
+        if (pt[0], pt[1]) in vxs:
+            ras[yi, xi] = zs[(pt[0], pt[1])]
+        tr_area = triangle_area(v1, v2, v3)
+        if tr_area == False: return False
+        ws = [triangle_area((pt[0], pt[1]), v2, v3) / tr_area,
+              triangle_area((pt[0], pt[1]), v1, v3) / tr_area,
+              triangle_area((pt[0], pt[1]), v2, v1) / tr_area]
+        try: vx_zs = [zs[vxs[i]] for i in range(3)]
+        except: return False
+        return (vx_zs[0] * ws[0] +
+                vx_zs[1] * ws[1] +
+                vx_zs[2] * ws[2])
+    np.seterr(all='raise')
+    for polys in in_vecs:
+        for poly in polys:
+            constraints = []
+            for vx in poly.exterior.coords[:-1]:
+                val = interpolate(vx)
+                if val == False: continue
+                zs[(vx[0], vx[1])] = val
+                constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+            for interior in poly.interiors:
+                for vx in interior.coords:
+                    val = interpolate(vx)
+                    if val == False: continue
+                    zs[(vx[0], vx[1])] = val
+                    constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+            for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
+                cdt.insert_constraint(vx0, vx1)
     ras = np.zeros([res[1], res[0]])
     yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
         xi = 0
         for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-            tr = cdt.locate (Point_2(x, y))
-            v1 = tr.vertex(0).point().x(), tr.vertex(0).point().y()
-            v2 = tr.vertex(1).point().x(), tr.vertex(1).point().y()
-            v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
-            vxs = [v1, v2, v3]
-            tr_area = area(v1, v2, v3)
-            if tr_area == False: continue
-            ws = [area((x, y), v2, v3) / tr_area,
-                  area((x, y), v1, v3) / tr_area,
-                  area((x, y), v2, v1) / tr_area]
-            if (x, y) in vxs:
-                val = zs.get((x, y))
-                if val != None: ras[yi, xi] = val
-                else: ras[yi, xi] = -9999
-            else:
-                valid_vxs = [None, None, None]
-                for i in range(3): valid_vxs[i] = zs.get(vxs[i])
-                if None not in valid_vxs:
-                    ras[yi, xi] = (valid_vxs[0] * ws[0] +
-                                   valid_vxs[1] * ws[1] +
-                                   valid_vxs[2] * ws[2])
-                elif valid_vxs.count(None) == 1:
-                    for i in range(3):
-                        if valid_vxs[i] != None:
-                            ras[yi, xi] += valid_vxs[i] * ws[i]
-                elif valid_vxs.count(None) == 2:
-                    for vx in valid_vxs:
-                        if vx != None:
-                            ras[yi, xi] = vx; break
-                else: ras[yi, xi] = -9999
+            val = interpolate((x, y))
+            if val == False: ras[yi, xi] = -9999
+            else: ras[yi, xi] = val
             xi += 1
         yi += 1
-    yi = 0
-    for y in np.arange(origin[1], origin[1] + res[1] * size, size):
-        xi = 0
-        for x in np.arange(origin[0], origin[0] + res[0] * size, size):
-            if np.isnan(ras[yi, xi]) == True:
-                val, vcount = 0, 0
-                for yj in range(3):
-                    for xj in range(3):
-                        if (ras[yi + yj - 1, xi + xj - 1] != -9999 and
-                            np.isnan(ras[yi + yj - 1, xi + xj - 1]) == False):
-                            val += ras[yi + yj - 1, xi + xj - 1]; vcount += 1
-                if vcount >= 4: ras[yi, xi] = val
-            xi += 1
-        yi += 1
+    np.seterr(all='warn')
     return ras
 
 def execute_pdal(preproc, target_folder, fpath, size, fmt, rad, pwr, wnd):
@@ -179,8 +178,7 @@ def execute_pdal(preproc, target_folder, fpath, size, fmt, rad, pwr, wnd):
     options, exposing the radius, power and a fallback kernel width
     to be configured. More about these in the readme on GitHub.
     """
-    import sys
-    if "pdal" not in sys.modules: import pdal
+    import pdal
     if fmt == "GeoTIFF":
         if preproc == False:
             config = ('[\n\t"' + fpath + '",\n' +
@@ -229,7 +227,7 @@ def execute_idwquad(pts, res, origin, size,
                 if method == "radial":
                     ix = tree.query_ball_point([x, y], rk, tolerance)
                 elif method == "k-nearest":
-                    ix = tree.query([x, y], rk, tolerance)
+                    ix = tree.query([x, y], rk, tolerance)[1]
                 xyp = pts[ix]
                 qs = [
                         xyp[(xyp[:,0] < x) & (xyp[:,1] < y)],
@@ -241,8 +239,7 @@ def execute_idwquad(pts, res, origin, size,
                        qs[2].size, qs[3].size) >= minp: done = True
                 elif i == maxiter:
                     ras[yi, xi] = -9999; break
-                rk += incr_rk
-                i += 1
+                rk += incr_rk; i += 1
             else:
                 asum, bsum = 0, 0
                 for pt in xyp:
@@ -292,6 +289,79 @@ def write_geotiff(raster, origin, size, fpath):
                            ) as out_file:
             out_file.write(raster, 1)
 
+def patch(raster, res, origin, size, min_n):
+    """Patches in missing pixel values by applying a median
+    kernel (3x3) to estimate its value. This is meant to serve
+    as a means of populating missing pixels, not as a means
+    of interpolating large areas. The last parameter should
+    be an integer that specifies the minimum number of valid
+    neighbour values to fill a pixel (0 <= min_n <= 8).
+    """
+    mp = [[-1, -1], [-1, 0], [-1, 1], [0, -1],
+          [0, 1], [1, -1], [1, 0], [1, 1]]
+    for yi in range(res[1]):
+        for xi in range(res[0]):
+            if raster[yi, xi] == -9999:
+                vals = []
+                for m in range(8):
+                    xw, yw = xi + mp[m][0], yi + mp[m][1]
+                    if (xw >= 0 and xw < res[0]) and (yw >= 0 and yw < res[1]):
+                        val = raster[yw, xw]
+                        if val != -9999: vals += [val]
+                if len(vals) > min_n: raster[yi, xi] = np.median(vals)
+
+def flatten_water(target_folder, raster, res, origin, size):
+    """Reads some pre-determined vector file, tiles them using
+    Lisa's code and "burns" them into the output raster. The flat
+    elevation of the polygons is estimated by Laplace-interpolating
+    at the locations of the polygon vertices. The underlying TIN
+    is constructed from the centre points of the raster pixels.
+    Rasterisation takes place via rasterio's interface.
+    """
+    import startin
+    import shapely.geometry as sg
+    from rasterio.features import rasterize
+    from rasterio.transform import Affine
+    transform = (Affine.translation(origin[0], origin[1])
+                 * Affine.scale(size, size))
+    x0, x1 = origin[0] + size / 2, origin[0] + ((res[0] - 0.5) * size)
+    y0, y1 = origin[1] + size / 2, origin[1] + ((res[1] - 0.5) * size)
+    poly_fpaths = [
+                     'rest_bodies/bbg_rest_of_the_water.shp',
+                     'river_bodies/bbg_only_river_bodies.shp',
+                     'sea_bodies/bbg_sea_and_big_bodies.shp',
+                     #'BAG_NL.geojson'
+                  ]
+    in_vecs = []
+    for fpath in poly_fpaths:
+        vec = vector_prepare([[x0, x1], [y0, y1]], target_folder + fpath)
+        if len(vec) != 0: in_vecs.append(vec)
+    if len(in_vecs) == 0: return
+    xs, ys = np.linspace(x0, x1, res[0]), np.linspace(y0, y1, res[1])
+    xg, yg = np.meshgrid(xs, ys)
+    cs = np.vstack((xg.flatten(), yg.flatten(), raster.flatten())).transpose()
+    data = cs[cs[:,2] != -9999]; data_hull = sg.MultiPoint(data).convex_hull
+    tin = startin.DT(); tin.insert(data)
+    elevations = []
+    for polys in in_vecs:
+        for poly, i in zip(polys, range(len(polys))):
+            els = []
+            for vx in poly.exterior.coords:
+                if sg.Point(vx).within(data_hull):
+                    els += [tin.interpolate_laplace(vx[0], vx[1])]
+            for interior in poly.interiors:
+                for vx in interior.coords:
+                    if sg.Point(vx).within(data_hull):
+                        els += [tin.interpolate_laplace(vx[0], vx[1])]
+            elevations.append(np.median(els))
+    shapes = []
+    for polys in in_vecs:
+        shapes += [(p, v) for p, v in zip(polys, elevations)]
+    raspolys = rasterize(shapes, raster.shape, -9999, transform = transform)
+    for yi in range(res[1]):
+        for xi in range(res[0]):
+            if raspolys[yi, xi] != -9999: raster[yi, xi] = raspolys[yi, xi]
+    
 def ip_worker(mp):
     """Multiprocessing worker function to be used by the
     p.map function to map objects to, and then start
@@ -301,11 +371,12 @@ def ip_worker(mp):
     Runs slightly different workflows depending on the
     desired interpolation method/export format.
     """
-    preprocessed, size, fpath = mp[0], mp[1], (mp[2] + mp[3])[:-4] + '_gf.las'
-    target_folder, fname, method, fmt = mp[2], mp[3], mp[4], mp[5]
-    idw0_polyfpath, idw1, idw2, idw3 = mp[6], mp[7], mp[8], mp[9] 
-    idw4, idw5, idw6 = mp[10], mp[11], mp[12]
-    print("PID {} starting to interpolate file {}".format(os.getpid(), fname))
+    preprocessed, postprocess = mp[0], mp[1]
+    size, fpath = mp[2], (mp[3] + mp[4])[:-4] + '_gf.las'
+    target_folder, fname, method, fmt = mp[3], mp[4], mp[5], mp[6]
+    idw0_polyfpath, idw1, idw2, idw3 = mp[7], mp[8], mp[9], mp[10] 
+    idw4, idw5, idw6 = mp[11], mp[12], mp[13]
+    print("PID {} starting to work on {}".format(os.getpid(), fname))
     start = time()
     if method == 'PDAL-IDW':
         execute_pdal(preprocessed, target_folder, fpath, size, fmt,
@@ -315,7 +386,7 @@ def ip_worker(mp):
           "Time elapsed: {} sec.".format(round(end - start, 2)))
         return
     if preprocessed == False:
-        gnd_coords, res, origin = prepare(size, fpath)
+        gnd_coords, res, origin = las_prepare(size, fpath)
     else:
         from math import ceil
         gnd_coords = np.asarray(preprocessed[0].tolist())[:,:3]
@@ -330,14 +401,24 @@ def ip_worker(mp):
     elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
     elif method == 'CGAL-CDT':
-        ras = execute_cgal_CDT(gnd_coords, res, origin, size, idw0_polyfpath)
+        ras = execute_cgal_cdt(gnd_coords, res, origin, size, target_folder)
     elif method == 'IDWquad':
         ras = execute_idwquad(gnd_coords, res, origin, size,
                               idw0_polyfpath, idw1, idw2, idw3,
                               idw4, idw5, idw6)
     end = time()
-    print("PID {} finished interpolation.".format(os.getpid()),
+    print("PID {} finished interpolating.".format(os.getpid()),
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
+    if postprocess > 0:
+        start = time()
+        if postprocess == 2 or postprocess == 3:
+            flatten_water(target_folder, ras, res, origin, size)
+        if postprocess == 1 or postprocess == 3:
+            patch(ras, res, origin, size, 0)
+        end = time()
+        print("PID {} finished post-processing.".format(os.getpid()),
+              "Time spent post-processing: {} sec.".format(
+                  round(end - start, 2)))
     start = time()
     if method == 'startin-TINlinear' and fmt == 'GeoTIFF':
         write_geotiff(ras, origin, size, fpath[:-4] + '_TINlinear.tif')
@@ -363,8 +444,8 @@ def ip_worker(mp):
     print("PID {} finished exporting.".format(os.getpid()),
           "Time spent exporting: {} sec.".format(round(end - start, 2)))
 
-def start_pool(target_folder, preprocess = False, size = 1,
-               method = 'startin-Laplace', fmt = 'GeoTIFF',
+def start_pool(target_folder, preprocess = "False", postprocess = 0,
+               size = 1, method = 'startin-Laplace', fmt = 'GeoTIFF',
                idw0_polyfpath = 5, idw1 = 2, idw2 = 0, idw3 = 2,
                idw4 = 'radial', idw5 = 0.2, idw6 = 3):
     """Assembles and executes the multiprocessing pool.
@@ -374,8 +455,9 @@ def start_pool(target_folder, preprocess = False, size = 1,
     if preprocess == "False": preprocess = False
     else: preprocess = True
     preprocessed = False
-    if preprocess == True and method == 'PDAL-IDW':
-        preprocessed = True
+    if preprocess == True and method == 'PDAL-IDW': preprocessed = True
+    if int(postprocess) != 0 and method == 'PDAL-IDW':
+        print("PDAL-IDW is not yet compatible with post-processing."); return
     elif preprocess == True:
         print("\nRunning pre-processing pool before interpolating.")
         from gf_processing import start_pool as gf_pool
@@ -392,19 +474,18 @@ def start_pool(target_folder, preprocess = False, size = 1,
               str(len(fnames)) + " processes on " + str(cores) + " cores.\n")
     elif len(fnames) == 0:
         print("Error: No file names were input. Returning."); return
-    processno = len(fnames)
-    pre_map = []
+    pre_map, processno = [], len(fnames)
     if method != 'CGAL-CDT': idw0_polyfpath = float(idw0_polyfpath)
     if preprocess == True and method != 'PDAL-IDW':
         for i in range(processno):
-            pre_map.append([preprocessed[i], float(size), target_folder,
-                            fnames[i].strip('\n'), method, fmt,
+            pre_map.append([preprocessed[i], int(postprocess), float(size),
+                            target_folder, fnames[i].strip('\n'), method, fmt,
                             idw0_polyfpath, float(idw1), float(idw2),
                             float(idw3), idw4, float(idw5), float(idw6)])        
     else:
         for i in range(processno):
-            pre_map.append([preprocessed, float(size), target_folder,
-                            fnames[i].strip('\n'), method, fmt,
+            pre_map.append([preprocessed, int(postprocess), float(size),
+                            target_folder, fnames[i].strip('\n'), method, fmt,
                             idw0_polyfpath, float(idw1), float(idw2),
                             float(idw3), idw4, float(idw5), float(idw6)])
     p = Pool(processes = processno)

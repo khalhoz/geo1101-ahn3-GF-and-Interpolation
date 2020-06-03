@@ -19,30 +19,32 @@
 * `ip_main.py` _(main file for interpolation)_
 * `ip_processing.py` _(interpolation code)_
 * `ip_st_test` _(some raster tile statistics generation code from Khaled)_
-* `las_prepare.py` _(factored out from `ip_processing.py`)_
+* `las_prepare.py` _(reads LAS file and establishes raster dimensions, part of main program)_
+* `Make_tile_vectors.py` _(Lisa's vector tiling program)_
 * `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
+* `vector_prepare.py` _(reads vector file and extracts a vector tile from it, adapted from `Make_tile_vectors.py` and part of main program)_
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 constrained Delaunay-based (CDT) TIN-linear and natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code.
-We might be able to implement an ellipsodial IDW solution in the future, but it is proving much more difficult than anticipated (more about this at the end of the readme).
+It also includes these post-processing modules so far: flattening the areas of polygons in the raster, and patching in missing pixels.
 
 **NEW STUFF**
 
-* First release of CGAL-CDT. Everything seems to be working, but needs more testing.
-* Added an option to pre-process the data before interpolation using a PDAL pipeline, creating a single entry point for the whole process
-* Re-wrote the CGAL-NN algorithm to use true natural neighbours and not regular neighbours
+* First release of post-processing. Patching missing pixels and flattening polygon areas works, and needs testing!
+* Re-designed CGAL-CDT. It no longer tries to create empty constraint-holes, instead focusing on performance.
+* Fixed the k-nearest sub-method of IDWquad.
 * Fixed lots of bugs
 
 ## Current tasks
 
 I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we aim to skip secondary hole filling altogether by using a TIN-based
 interpolation method. This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and
-will now move on to implementing algorithms. Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body
-shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints). As a backup plan, we would use Laplace interpolation, but in this
-case we would not be able to create holes in the triangulation using the water polygons, and we would probably end up needing to overlay them with the rasters post-interpolation.
+will now move on to implementing algorithms. ~~Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body
+shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).~~ This did not work out. :(
+Instead, we are overlaying the input geometries with the raster, estimating polygon elevations by interpolating in the TIN of the pixel centres.
 
-Following some further consultation with Jeroen, we will also double-check how well our primary interpolation method interpolates the building gaps. If they look too triangular, we might
-consider trying to flatten them (like water bodies), or using an alternative secondary interpolation mechanism inside of them.
+Following some further consultation with Jeroen, we will also double-check how well our primary interpolation method interpolates the building gaps. If they look too triangular,
+we might consider trying to flatten them (like water bodies), or using an alternative secondary interpolation mechanism inside of them.
 
 ## PDAL pipeline entry point (stand-alone ground filtering/pre-processing)
 
@@ -62,57 +64,77 @@ in which case you would use `python [file_path_to_main] [target_folder] dsm pre`
 
 ## Primary entry point (optional ground filtering/pre-processing + interpolation)
 
-`ip_main.py` is intended to be the primary entry point to the program. You can either use it to interpolate pre-processed LAS files you had already generated using the above secondary entry point,
-or run ground-filtering/pre-processing as part of this process. In the prior case, the program assumes that you used the default `_gf.las` tag for your final exports. It also needs the same
-`fnames.txt` file to be present (and the file names in it shoud **not** be tagged `_gf.las`).
+`ip_main.py` is intended to serve as the primary entry point to the program. It includes CMD arguments to run pre-processing via `gf_main.py` and post-processing, optionally.
+If you use it to _only_ interpolate pre-processed LAS files you generated using PDAL pipeline entry point, the program will assume that you used the default `_gf.las` tag
+for your ground filtered/pre-processed LAS files. It always needs the `fnames.txt` file to be present (and the file names in it shoud **not** be tagged `_gf.las` even if the
+PDAL pipeline had already been run).
 
-If you use this as the primary entry point, you do not need to separately pre-process the data. Just provide `True` as the second argument (as described below), and the program will automatically
-run the PDAL pipeline too. In this case, it is necessary that your config JSON is called `config_preprocess.json`. Note that this solution transfers data between the PDAL-based preprocessing and
-the interpolation in memory, and is hence _faster_ than running `gf_main.py` separately beforehand. The PDAL-IDW method has also been adapted to work so that pre-processing an interpolation form
-a single pipeline if you are also running pre-processing from this entry point.
+If you wish to run ground filtering/pre-processing from this entry point, you need to call your config file `config_preprocess.json`. Note that this entry point transfers data
+between the pre-processing and interpolation stages _in memory_, and is hence faster than running `gf_main.py` separately beforehand. The PDAL-IDW method has also been adapted
+to work so that pre-processing and interpolation form a single pipeline if you run pre-processing from this entry point.
 
-The intended workflow is:
-1. Check that you still have the ground filtered files and the `fnames.txt` file in your target folder if you had run the ground filtering/pre-processing workflow separately beforehand.
-2. Run `ip_main.py` **from the console**. If you run it from an IDE, it will probably not fork the processes properly. The following arguments should be provided:
-    1. target folder (most likely the same as the one you used with PDAL)
-	2. bool to indicate if you would like pre-processing to be run before interpolation _(the default value is `False`)_
-    3. pixel size (in metres) for interpolation _(the default value is 1)_
-    4. interpolation method, one of:
-        * startin-TINlinear
-        * startin-Laplace _(default)_
-        * CGAL-NN _(NOTE: Re-designed the algorithm, now uses true natural neighbours.)_
-		* CGAL-CDT
-		* PDAL-IDW
-		* IDWquad
-	5. output format, one of:
-        * ASC
-        * GeoTIFF _(default)_
-    6. IDW argument 1 / File path to input polygons for CDT:
-		* _If using PDAL-IDW:_ IDW interpolation radius in metres
-		* _If using IDWquad:_ The _starting_ radius/number of neighbours _k_ to query
-		* _If using CGAL-CDT:_ A file path to a fiona-compatible vector file to be used for setting up the CDT constraints.
-	7. IDW argument 2: IDW interpolation power (exponent) in metres _(both for PDAL-IDW and IDWquad)_
-	8. IDW argument 3:
-		* _If using PDAL-IDW:_ interpolation fallback window size
-		* _If using IDWquad:_ minimum number of points to find per quadrant
-	9. IDW argument 4: query radius/number of neighbours _k_ to query, increment step value _(only for IDWquad)_
-	10. IDW argument 5: IDWquad method, one of:
-		* radial _(for iterative radius increments)_
-		* k-nearest _(for iterative increments of how many neighbours to query)_
-	11. IDW argument 6: IDWquad KD-tree query tolerance value _eps_
-	12. IDW argument 7: IDWquad maximum number of iterations before declaring no-data and proceeding to next pixel
+If you wish to run CGAL-CDT or polygon-based post-processing, you will need to have all the input polygons in your target folder in the same folder structures as released by
+Lisa and Khaled on Stack (see below). At the moment, they both read rivers, seas and the rest of the polygons from Lisa's files by default, and optionally you can uncomment
+the file path to Khaled's BAG file in the code to also read those (you can do so separately inside the execute_cgal_cdt function and the flatten_water function).
+BAG is commented out in the code as we have not yet decided to flatten building footprints, and also because it is a gargantuan data set and it effectively never finishes processing
+on my computer. We will probably need to find an alternative version of this data set that is binary, or develop a different vector tiling algorithm that performs better.
+
+The file paths are relative to the target folder:
+
+`rest_bodies/bbg_rest_of_the_water.shp`
+
+`river_bodies/bbg_only_river_bodies.shp`
+
+`sea_bodies/bbg_sea_and_big_bodies.shp`
+
+`BAG_NL.geojson` _(commented out in the code by default)_
+
+You are advised to run `ip_main.py` **from the console**, preferably from Anaconda Prompt. If you run it from an IDE, it will probably not fork the processes properly.
+
+A key to the CMD call signature of `ip_main.py`:
+1. target folder file path
+2. bool to indicate if you would like pre-processing to be run before interpolation _(the default value is `False`)_
+3. integer to set the post-processing mode, currently these ones are available:
+	* **0** _(default, does not run post-processing)_
+	* **1** _(runs missing pixel value patching only)
+	* **2** _(runs polygon flattening only)
+	* **3** _(runs both patching and polygon flattening)
+4. pixel size (in metres) for interpolation _(the default value is 1)_
+5. interpolation method, one of:
+	* startin-TINlinear
+	* startin-Laplace _(default)_
+	* CGAL-NN
+	* CGAL-CDT
+	* PDAL-IDW
+	* IDWquad
+6. output format, one of:
+	* ASC
+	* GeoTIFF _(default)_
+7. IDW argument 0
+	* _If using PDAL-IDW:_ IDW interpolation radius in metres
+	* _If using IDWquad:_ The _starting_ radius/number of neighbours _k_ to query
+8. IDW argument 1: IDW interpolation power (exponent) in metres _(both for PDAL-IDW and IDWquad)_
+9. IDW argument 2:
+	* _If using PDAL-IDW:_ interpolation fallback window size
+	* _If using IDWquad:_ minimum number of points to find per quadrant
+10. IDW argument 3: query radius/number of neighbours _k_ to query, increment step value _(only for IDWquad)_
+11. IDW argument 4: IDWquad method, one of:
+	* radial _(for iterative radius increments)_
+	* k-nearest _(for iterative increments of how many neighbours to query)_
+12. IDW argument 5: IDWquad KD-tree query tolerance value _eps_
+13. IDW argument 6: IDWquad maximum number of iterations before declaring no-data and proceeding to next pixel
 
 An example call in the Windows Anaconda Prompt would be:
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ False 2 startin-TINlinear ASC`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ False 0 2 startin-TINlinear ASC`
 
 Or for the PDAL-IDW algorithm (using pre-processing) with radius and power values it would be
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ True 0.5 PDAL-IDW GeoTIFF 10 2`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ True 0 0.5 PDAL-IDW GeoTIFF 10 2`
 
-As indicated above, for CGAL-CDT the sixth argument is a file path too. For example:
+For using pre-processing and both post-processing modes (and defaults for everything else):
 
-`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ False 1.5 CGAL-CDT GeoTIFF C:/Users/geo-geek/some_folder/killer_polygons.shp`
+`python C:/Users/geo-geek/some_folder/ip_main.py C:/Users/geo-geek/target_folder/ True 3`
 
 ## A word of caution
 
@@ -132,7 +154,7 @@ depending on the tile. Negative elevation values are perfectly possible in The N
 In QGIS, you do this by right clicking on your raster layer, and clicking on "Properties...". In the window that pops up, you can change the lower bound of the colour scale by
 adjusting the value in the field Symbology --> Band Rendering --> Min.
 
-**Note:** ASC export is not currently supported for the PDAL-IDW algorithm.
+**Note:** ASC export is not currently supported for the PDAL-IDW algorithm. It also does not yet support post-processing (it does support pre-processing though).
 
 **Another note:** You are advised to configure the IDWradial parametrisation **with performance in mind** when first getting started with IDWquad. Otherwise it might take _veeeeeery long_ to finish.
 
@@ -149,8 +171,8 @@ like the Voronoi and TIN-based methods).
 
 ### IDWquad
 This is a quadrant-based IDW implementation that is not built on top of third-party software (apart from scipy, from which cKDTree is used). It builds a KD-tree representation of the points of the
-input tile and overlay it with a raster of the desired dimensions. For each pixel, it iteratively queries more and more points until it has enough points **per quadrant** to consider an IDW
-interpolation reliable. The algorithm can either based its KD-tree queries on k-nearest neighbours to find, or a query radius to search within.
+input tile and overlays it with a raster of the desired dimensions. For each pixel, it iteratively queries more and more points until it has enough points **per quadrant** to consider an IDW
+interpolation reliable. The algorithm can either base its KD-tree queries on k-nearest neighbours to find, or a query radius to search within.
 I'll explain how it works by giving some more detail about the parameters, listing them in the same order as in the list of arguments above.
 
 * **Starting interpolation radius/number of neighbours _k_ to query:** The starting value for the radius or number of neighbours to query. This is the value that will be incremented until enough points per quadrant can be found to interpolate a value for the pixel.

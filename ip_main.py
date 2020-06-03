@@ -9,6 +9,7 @@ The arguments should be specified in this order:
       the ground filtering code separately, but it faster as it does not
       write intermediate results to disk. Assumes that the ground-
       filtering/pre-processing config is in config_preprocess.json.
+      [default: False]
     - pixel size (in metres) for interpolation
       [default: 1 metre]
     - interpolation method, one of:
@@ -45,7 +46,7 @@ from sys import argv
 from ip_processing import start_pool
 
 def main():
-    if 3 <= len(argv) <= 10: start_pool(*argv[1:])
+    if 2 <= len(argv) <= 13: start_pool(*argv[1:])
     else: print("Error: Incorrect number of arguments passed. Returning.")
     
 if __name__ == '__main__':
