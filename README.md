@@ -4,9 +4,9 @@
 
 ## In repo so far:
 
-* `Classification_F1_score` _(Khaled & Manos's quantitative ground filtering evaluation results)_
-* `Khaled_Interpolation` _(Some interpolation testing code from Khaled)_
-* `gf_target_example` _(example folder for LAS input files)_
+* `Classification_F1_score` folder _(Khaled & Manos's quantitative ground filtering evaluation)_
+* `Vertical_difference` folder _(Khaled & Manos's working folder for quantitative interpolation evaluation)_
+* `gf_target_example` folder _(example folder for LAS input files)_
 	* `config.json` _(ground filtering configuration file which you can push updates to)_
 	* `config_default.json` _(default ground filtering configuration file which should not be modified)_
 	* `config_preprocess.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)_
