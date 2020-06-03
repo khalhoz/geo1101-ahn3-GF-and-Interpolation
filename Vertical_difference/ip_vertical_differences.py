@@ -3,6 +3,7 @@ from rasterio.transform import Affine
 import laspy 
 import numpy as np
 from multiprocessing import Pool
+import math
 
 
 def read_file (directory):
@@ -26,7 +27,7 @@ def calculate_differences(pc_pts, raster_array, raster_cell_size, raster_bbox, r
     for col in range(raster_width):
         for row in range(raster_height):
             if raster_array[row][col] == -9999:
-                verticle_differences[row, col] = -9999
+                verticle_differences[row][col] = 0
             
     xmin = raster_bbox[0]
     ymin = raster_bbox[1]
@@ -45,16 +46,27 @@ def main(AHN_pc_file):
     AHN_pc = read_PC_Data("AHN/" + AHN_pc_file + ".las")
     interpolation_methods = ["IDW", "NN", "Laplace", "TINlinear"]
     file_name = "DSM_" + AHN_pc_file[4:] + "_"
+    ff = open("RMSE_report_" + AHN_pc_file[4:] + ".txt", "w")
+    
+
     for method in interpolation_methods:
         raster = method + "/" + file_name + method + ".tif"
         raster_info = read_file(raster)
         differences_values = calculate_differences(AHN_pc, raster_info[0], raster_info[1], raster_info[2], raster_info[3], raster_info[4])
         transform = (Affine.translation(raster_info[2][0], raster_info[2][3]) * Affine.scale(raster_info[1][0], raster_info[1][1]))
         with rasterio.Env():
-            with rasterio.open(method + "/" + file_name +'_verticle_differences.tif', 'w', driver = 'GTiff',
+            with rasterio.open(method + "/" + file_name +'verticle_differences.tif', 'w', driver = 'GTiff',
                         height = raster_info[4], width = raster_info[3], count = 1,
                         dtype = differences_values.dtype, crs='EPSG:28992', transform = transform) as dst:
                 dst.write(differences_values, 1)
+        
+        squared_sum = 0
+        for col in range(raster_info[3]):
+            for row in range(raster_info[4]):
+                    squared_sum += (differences_values[row][col]**2)
+        N = (raster_info[3] * raster_info[4]) - np.count_nonzero(differences_values == 0)
+        RMSE = math.sqrt(squared_sum/N)
+        ff.write("RMSE for " + method + "_" + file_name + " = " + str(RMSE) + "\n")
 
 
 if __name__ == '__main__':
