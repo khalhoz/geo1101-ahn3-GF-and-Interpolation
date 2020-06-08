@@ -18,21 +18,19 @@ def vector_prepare(bbox, fpath):
     B = Point(bbox[0][1], bbox[1][1])
     C = Point(bbox[0][1], bbox[1][0])
     D = Point(bbox[0][0], bbox[1][0])
-    boundary_line = LineString([A,B,C,D,A])
+    bbox_lines = LineString([A,B,C,D,A])
     bbox_object = box(bbox[0][0], bbox[1][0], bbox[0][1], bbox[1][1])
     out = []
     for feature in fiona.open(fpath):
-        merger = [boundary_line]
-        coords = feature['geometry']['coordinates']
-        for ring in coords:
-            poly = Polygon(ring)
-            if poly.within(bbox_object):
-                out.append(shape(feature['geometry']))
-            elif poly.intersects(bbox_object):
-                merger.append(poly.boundary)
+        merger = [bbox_lines]
+        rings = feature['geometry']['coordinates']
+        for ring_coords in rings:
+            ring = Polygon(ring_coords)
+            if ring.within(bbox_object): out.append(shape(feature['geometry']))
+            elif ring.intersects(bbox_object): merger.append(ring.boundary)
         if len(merger) != 1:
-            if len(coords) > 1: poly = Polygon(coords[0], coords[1:])
-            else: poly = Polygon(coords[0])
+            if len(rings) > 1: poly = Polygon(rings[0], rings[1:])
+            else: poly = Polygon(rings[0])
             merged = linemerge(merger)
             borders = unary_union(merged)
             polygons = polygonize(borders)

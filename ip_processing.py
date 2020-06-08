@@ -9,6 +9,7 @@ from multiprocessing import Pool, cpu_count
 import numpy as np
 from las_prepare import las_prepare
 from vector_prepare import vector_prepare
+from wfs_prepare import wfs_prepare
 
 def triangle_area(a, b, c):
     """Computes the area of a triangle with sides a, b, and c.
@@ -106,6 +107,7 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
     and trigger an exception. These are caught and result in no-data pixels
     which are then filled with values using a median kernel.
     """
+    from shapely.geometry import Polygon
     from CGAL.CGAL_Kernel import Point_2
     from CGAL.CGAL_Mesh_2 import Mesh_2_Constrained_Delaunay_triangulation_2
     cdt = Mesh_2_Constrained_Delaunay_triangulation_2()
@@ -119,13 +121,21 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
                      'rest_bodies/bbg_rest_of_the_water.shp',
                      'river_bodies/bbg_only_river_bodies.shp',
                      'sea_bodies/bbg_sea_and_big_bodies.shp',
-                     #'BAG_NL.geojson'
+                     # You can add more resources here.
+                  ]
+    wfs_urls =    [
+                     'http://3dbag.bk.tudelft.nl/data/wfs',
+                     # You can add more resources here.
                   ]
     in_vecs = []
     for fpath in poly_fpaths:
         vec = vector_prepare([[origin[0], origin[0] + res[0] * size],
                               [origin[1], origin[1] + res[1] * size]],
                              target_folder + fpath)
+        if len(vec) != 0: in_vecs.append(vec)
+    for url in wfs_urls:
+        vec = wfs_prepare([[origin[0], origin[0] + res[0] * size],
+                           [origin[1], origin[1] + res[1] * size]], url)
         if len(vec) != 0: in_vecs.append(vec)
     def interpolate(pt):
         tr = cdt.locate(Point_2(pt[0], pt[1]))
@@ -134,7 +144,8 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
         v3 = tr.vertex(2).point().x(), tr.vertex(2).point().y()
         vxs = [v1, v2, v3]
         if (pt[0], pt[1]) in vxs:
-            ras[yi, xi] = zs[(pt[0], pt[1])]
+            try: zs[(pt[0], pt[1])]
+            except: return False
         tr_area = triangle_area(v1, v2, v3)
         if tr_area == False: return False
         ws = [triangle_area((pt[0], pt[1]), v2, v3) / tr_area,
@@ -142,26 +153,38 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
               triangle_area((pt[0], pt[1]), v2, v1) / tr_area]
         try: vx_zs = [zs[vxs[i]] for i in range(3)]
         except: return False
-        return (vx_zs[0] * ws[0] +
-                vx_zs[1] * ws[1] +
-                vx_zs[2] * ws[2])
+        return vx_zs[0] * ws[0] + vx_zs[1] * ws[1] + vx_zs[2] * ws[2]
     np.seterr(all='raise')
     for polys in in_vecs:
         for poly in polys:
-            constraints = []
+            if len(poly.exterior.coords[:-1]) < 3: continue
+            ring, vals, constraints = [], [], []
             for vx in poly.exterior.coords[:-1]:
                 val = interpolate(vx)
                 if val == False: continue
-                zs[(vx[0], vx[1])] = val
-                constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+                ring.append(vx); vals.append(val)
+            try:
+                Polygon(ring)
+                for val in vals: zs[(vx[0], vx[1])] = val
+                for vx in ring:
+                    constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+                for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
+                    cdt.insert_constraint(vx0, vx1)
+            except: continue
             for interior in poly.interiors:
+                ring, vals, constraints = [], [], []
                 for vx in interior.coords:
                     val = interpolate(vx)
                     if val == False: continue
-                    zs[(vx[0], vx[1])] = val
-                    constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
-            for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
-                cdt.insert_constraint(vx0, vx1)
+                try:
+                    Polygon(ring)
+                    for val in vals: zs[(vx[0], vx[1])] = val
+                    for vx in ring:
+                        constraints.append(cdt.insert(Point_2(vx[0], vx[1])))
+                    for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
+                        cdt.insert_constraint(vx0, vx1)
+                except: continue
+    print("finished pre-interpolating")
     ras = np.zeros([res[1], res[0]])
     yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
@@ -333,11 +356,18 @@ def flatten_water(target_folder, raster, res, origin, size):
                      'rest_bodies/bbg_rest_of_the_water.shp',
                      'river_bodies/bbg_only_river_bodies.shp',
                      'sea_bodies/bbg_sea_and_big_bodies.shp',
-                     #'BAG_NL.geojson'
+                     # You can add more resources here.
+                  ]
+    wfs_urls =    [
+                     #'http://3dbag.bk.tudelft.nl/data/wfs',
+                     # You can add more resources here.
                   ]
     in_vecs = []
     for fpath in poly_fpaths:
         vec = vector_prepare([[x0, x1], [y0, y1]], target_folder + fpath)
+        if len(vec) != 0: in_vecs.append(vec)
+    for url in wfs_urls:
+        vec = wfs_prepare([[x0, x1], [y0, y1]], url)
         if len(vec) != 0: in_vecs.append(vec)
     if len(in_vecs) == 0: return
     xs, ys = np.linspace(x0, x1, res[0]), np.linspace(y0, y1, res[1])

@@ -23,6 +23,7 @@
 * `Make_tile_vectors.py` _(Lisa's vector tiling program)_
 * `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
 * `vector_prepare.py` _(extracts a vector tile from a vector file, adapted from `Make_tile_vectors.py` and part of main program)_
+* `vector_prepare.py` _(extracts a vector tile from an OGC WFS service, code based on `vector_prepare.py`)_
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 constrained Delaunay-based (CDT) TIN-linear and natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code.
@@ -30,10 +31,10 @@ It also includes these post-processing modules so far: flattening the areas of p
 
 **NEW STUFF**
 
-* First release of post-processing. Patching missing pixels and flattening polygon areas works, and needs testing!
-* Re-designed CGAL-CDT. It no longer tries to create empty constraint-holes, instead focusing on performance.
-* Fixed the k-nearest sub-method of IDWquad.
-* Fixed lots of bugs.
+* Holes in polygons are now handled correctly in CGAL-CDT and post-processing.
+* Re-designed CGAL-CDT _yet again_. BAG is now used by default, through the 3dbk WFS service.
+* WFS services can also be used as the basis for polygon-based flattening.
+* Fixed some minor bugs.
 
 ## Current tasks
 
@@ -75,21 +76,15 @@ If you wish to run ground filtering/pre-processing from this entry point, you ne
 between the pre-processing and interpolation stages _in memory_, and is hence faster than running `gf_main.py` separately beforehand. The PDAL-IDW method has also been adapted
 to work so that pre-processing and interpolation form a single pipeline if you run pre-processing from this entry point.
 
-If you wish to run CGAL-CDT or polygon-based post-processing, you will need to have all the input polygons in your target folder in the same folder structures as released by
-Lisa and Khaled on Stack (see below). At the moment, they both read rivers, seas and the rest of the polygons from Lisa's files by default, and optionally you can uncomment
-the file path to Khaled's BAG file in the code to also read those (you can do so separately inside the execute_cgal_cdt function and the flatten_water function).
-BAG is commented out in the code as we have not yet decided to flatten building footprints, and also because it is a gargantuan data set and it effectively never finishes processing
-on my computer. We will probably need to find an alternative version of this data set that is binary, or develop a different vector tiling algorithm that performs better.
-
-The file paths are relative to the target folder:
+If you wish to run CGAL-CDT or polygon-based post-processing, you will need to have all the water polygons in your target folder in the same folder structures as released by
+Lisa. The BAG data set is automatically fetched through WFS requests from Godzilla, so no need to have a local copy of it. You can add your own vector files and WFS URLs if
+you want. The custom resources can be specified in the `poly_fpaths` and `wfs_urls` variables, which are available separately in both the `execute_cgal_cdt` and the `flatten_water`
+functions in the `ip_processing.py` script. The vector file file paths are relative to the target folder, as illustrated by the default entries, for instance:
 
 `rest_bodies/bbg_rest_of_the_water.shp`
 
-`river_bodies/bbg_only_river_bodies.shp`
-
-`sea_bodies/bbg_sea_and_big_bodies.shp`
-
-`BAG_NL.geojson` _(commented out in the code by default)_
+For the post-processing, BAG is disabled by default as we do not want to flatten building footprints. The flattening script is primarily meant for stationary water bodies (although
+rivers are also treated like stationary water bodies at the moment, as the real hydro-flattening scripts are not yet functional).
 
 You are advised to run `ip_main.py` **from the console**, preferably from Anaconda Prompt. If you run it from an IDE, it will probably not fork the processes properly.
 
