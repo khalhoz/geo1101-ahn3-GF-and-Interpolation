@@ -8,7 +8,7 @@ from shapely.geometry import shape, Point, LineString, box, Polygon
 from shapely.ops import linemerge, unary_union, polygonize
 from owslib.wfs import WebFeatureService
 
-def wfs_prepare(bbox, URL):
+def wfs_prepare(bbox, URL, layer):
     """Takes a bounding box and a WFS service URL.
     Requests features in the bounding box, finds polygons that are within
     the bounding box or intersect it. Crops the intersecting geometries
@@ -21,11 +21,11 @@ def wfs_prepare(bbox, URL):
     D = Point(bbox[0][0], bbox[1][0])
     bbox_lines = LineString([A,B,C,D,A])
     bbox_object = box(bbox[0][0], bbox[1][0], bbox[0][1], bbox[1][1])
-    bag_godzilla = WebFeatureService(url=URL, version='2.0.0')
-    response = bag_godzilla.getfeature(typename='BAG3D:pand3d',
-                                       bbox=(bbox[0][0], bbox[1][0],
-                                             bbox[0][1], bbox[1][1]),
-                                       outputFormat='json')
+    wfs = WebFeatureService(url=URL, version='2.0.0')
+    response = wfs.getfeature(typename=layer,
+                              bbox=(bbox[0][0], bbox[1][0],
+                                    bbox[0][1], bbox[1][1]),
+                              outputFormat='json')
     response_json = json.loads(response.read())
     for feature in response_json['features']:
         rings = feature['geometry']['coordinates']

@@ -124,7 +124,7 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
                      # You can add more resources here.
                   ]
     wfs_urls =    [
-                     'http://3dbag.bk.tudelft.nl/data/wfs',
+                     ('http://3dbag.bk.tudelft.nl/data/wfs', 'BAG3D:pand3d'),
                      # You can add more resources here.
                   ]
     in_vecs = []
@@ -133,9 +133,10 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
                               [origin[1], origin[1] + res[1] * size]],
                              target_folder + fpath)
         if len(vec) != 0: in_vecs.append(vec)
-    for url in wfs_urls:
+    for wfs in wfs_urls:
         vec = wfs_prepare([[origin[0], origin[0] + res[0] * size],
-                           [origin[1], origin[1] + res[1] * size]], url)
+                           [origin[1], origin[1] + res[1] * size]],
+                          wfs[0], wfs[1])
         if len(vec) != 0: in_vecs.append(vec)
     def interpolate(pt):
         tr = cdt.locate(Point_2(pt[0], pt[1]))
@@ -184,7 +185,6 @@ def execute_cgal_cdt(pts, res, origin, size, target_folder):
                     for vx0, vx1 in zip(constraints, np.roll(constraints, -1)):
                         cdt.insert_constraint(vx0, vx1)
                 except: continue
-    print("finished pre-interpolating")
     ras = np.zeros([res[1], res[0]])
     yi = 0
     for y in np.arange(origin[1], origin[1] + res[1] * size, size):
@@ -309,11 +309,11 @@ def write_geotiff(raster, origin, size, fpath):
                            height = raster.shape[0],
                            width = raster.shape[1],
                            count = 1,
-                           dtype = raster.dtype,
+                           dtype = rasterio.float32,
                            crs='EPSG:28992',
                            transform = transform
                            ) as out_file:
-            out_file.write(raster, 1)
+            out_file.write(raster.astype(rasterio.float32), 1)
 
 def patch(raster, res, origin, size, min_n):
     """Patches in missing pixel values by applying a median
@@ -359,15 +359,15 @@ def flatten_water(target_folder, raster, res, origin, size):
                      # You can add more resources here.
                   ]
     wfs_urls =    [
-                     #'http://3dbag.bk.tudelft.nl/data/wfs',
+                     #('http://3dbag.bk.tudelft.nl/data/wfs', 'BAG3D:pand3d'),
                      # You can add more resources here.
                   ]
     in_vecs = []
     for fpath in poly_fpaths:
         vec = vector_prepare([[x0, x1], [y0, y1]], target_folder + fpath)
         if len(vec) != 0: in_vecs.append(vec)
-    for url in wfs_urls:
-        vec = wfs_prepare([[x0, x1], [y0, y1]], url)
+    for wfs in wfs_urls:
+        vec = wfs_prepare([[x0, x1], [y0, y1]], wfs[0], wfs[1])
         if len(vec) != 0: in_vecs.append(vec)
     if len(in_vecs) == 0: return
     xs, ys = np.linspace(x0, x1, res[0]), np.linspace(y0, y1, res[1])

@@ -23,7 +23,7 @@
 * `Make_tile_vectors.py` _(Lisa's vector tiling program)_
 * `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
 * `vector_prepare.py` _(extracts a vector tile from a vector file, adapted from `Make_tile_vectors.py` and part of main program)_
-* `vector_prepare.py` _(extracts a vector tile from an OGC WFS service, code based on `vector_prepare.py`)_
+* `wfs_prepare.py` _(extracts a vector tile from an OGC WFS service, code based on `vector_prepare.py`)_
 
 The testing environment so far includes multiprocessing pool-based implementations of ground filtering/pre-processing via PDAL, TIN-linear and Laplace interpolation via startin, 
 constrained Delaunay-based (CDT) TIN-linear and natural neighbour (NN) interpolation via CGAL, radial IDW via GDAL/PDAL and quadrant-based IDW via scipy cKDTree and our own code.
@@ -31,10 +31,11 @@ It also includes these post-processing modules so far: flattening the areas of p
 
 **NEW STUFF**
 
+* GeoTIFF raster export now uses `float32`.
 * Holes in polygons are now handled correctly in CGAL-CDT and post-processing.
 * Re-designed CGAL-CDT _yet again_. BAG is now used by default, through the 3dbk WFS service.
 * WFS services can also be used as the basis for polygon-based flattening.
-* Fixed some minor bugs.
+* Fixed some bugs. You can now actually add multiple WFS services, as the layer name is now also configurable.
 
 ## Current tasks
 
