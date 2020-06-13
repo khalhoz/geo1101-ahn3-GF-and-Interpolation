@@ -46,7 +46,7 @@ def main(AHN_pc_file):
     AHN_pc = read_PC_Data("AHN/" + AHN_pc_file + ".las")
     interpolation_methods = ["IDW", "NN", "Laplace", "TINlinear"]
     file_name = "DSM_" + AHN_pc_file[4:] + "_"
-    ff = open("RMSE_report_" + AHN_pc_file[4:] + ".txt", "w")
+    ff = open("MAE_report_" + AHN_pc_file[4:] + ".txt", "w")
     
 
     for method in interpolation_methods:
@@ -60,13 +60,14 @@ def main(AHN_pc_file):
                         dtype = differences_values.dtype, crs='EPSG:28992', transform = transform) as dst:
                 dst.write(differences_values, 1)
         
-        squared_sum = 0
+        abs_sum = 0
         for col in range(raster_info[3]):
             for row in range(raster_info[4]):
-                    squared_sum += (differences_values[row][col]**2)
+                    abs_sum += abs(differences_values[row][col])
         N = (raster_info[3] * raster_info[4]) - np.count_nonzero(differences_values == 0)
-        RMSE = math.sqrt(squared_sum/N)
-        ff.write("RMSE for " + method + "_" + file_name + " = " + str(RMSE) + "\n")
+        MAE = abs_sum/N
+        ff.write("MAE for " + method + "_" + file_name + " = " + str(MAE) + "\n")
+        print("MAE for " + method + "_" + file_name + " = " + str(MAE))
 
 
 if __name__ == '__main__':
