@@ -90,7 +90,7 @@ A key to the CMD call signature of `ip_main.py`:
 	* **1** _(runs missing pixel value patching only)_
 	* **2** _(runs basic flattening only)_
 	* **3** _(runs both patching and basic flattening)_
-	* **4** _(runs patching, basic flattening, and the river hydro-flattening algorithms)
+	* **4** _(runs patching, basic flattening, and the river hydro-flattening algorithms)_
 4. pixel size (in metres) for interpolation _(the default value is 1)_
 5. interpolation method, one of:
 	* startin-TINlinear
@@ -179,7 +179,7 @@ I'll explain how it works by giving some more detail about the parameters, listi
 
 ## More about the proper hydro-flattening algorithm
 
-It is based on the workflow I originally outlined in the proposal, which in turn was based on [this GitHub post] (https://github.com/tudelft3d/geo1101-ahn3-admin/issues/2#issuecomment-620467556).
+It is based on the workflow I originally outlined in the proposal, which in turn was based on [this GitHub post](https://github.com/tudelft3d/geo1101-ahn3-admin/issues/2#issuecomment-620467556).
 
 First, the river polygons (in this case the rivers extracted from BBG by Lisa) are skeletonised in Python. Lisa's code does this, it is not yet online
 here as of this readme update (but the end result files are on Stack, so this is not needed for testing).

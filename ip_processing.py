@@ -420,7 +420,7 @@ def hydro_flattening(target_folder, raster, res, origin, size, tin = False):
                      # You can add more resources here.
                    ]
     spine_fpaths = [
-                     'rivers_final/skeletons_final.shp',
+                     'skeletons_final/skeletons_final.shp',
                      # You can add more resources here.
                    ]
     in_rivers = []
