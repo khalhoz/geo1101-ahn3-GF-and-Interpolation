@@ -90,7 +90,7 @@ A key to the CMD call signature of `ip_main.py`:
 	* **1** _(runs missing pixel value patching only)_
 	* **2** _(runs basic flattening only)_
 	* **3** _(runs both patching and basic flattening)_
-	* **4** _(runs patching, basic flattening, and the river hydro-flattening algorithms)_
+	* **4** _(runs patching, basic flattening, and the **river hydro-flattening algorithm**)_
 4. pixel size (in metres) for interpolation _(the default value is 1)_
 5. interpolation method, one of:
 	* startin-TINlinear
@@ -191,7 +191,7 @@ The code in this repo reads the skeletons and the river polygons as part of the 
 post-processing argument (namely, `4`) in the command line call to `ip_main.py`. The vector import is done the usual way, i.e. they are cropped
 to the size of the tile that is being processed.
 
-The following then takes place:
+The following procedure then takes place:
 
 1. Orthogonal lines are cast on the skeleton at its vertices. These are intersected with the skeleton, and with the river boundary (shore lines).
 2. Each cross section is then associated with an elevation based on Laplace-interpolating at the two closest shore intersections and the skeleton intersection.
