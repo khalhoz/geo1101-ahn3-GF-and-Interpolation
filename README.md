@@ -31,22 +31,15 @@ It also includes these post-processing modules so far: flattening the areas of p
 
 **NEW STUFF**
 
+* First release of proper hydro-flattening.
 * GeoTIFF raster export now uses `float32`.
-* Holes in polygons are now handled correctly in CGAL-CDT and post-processing.
-* Re-designed CGAL-CDT _yet again_. BAG is now used by default, through the 3dbk WFS service.
 * WFS services can also be used as the basis for polygon-based flattening.
 * Fixed some bugs. You can now actually add multiple WFS services, as the layer name is now also configurable.
 
 ## Current tasks
 
-I am working with Lisa on hole-filling and hydro-flattening at the moment. For the final production environment, we aim to skip secondary hole filling altogether by using a TIN-based
-interpolation method. This will lend us some extra time to develop a useful water body and river flattening algorithm. We already have the necessary shapefiles from BBG thanks to Lisa, and
-will now move on to implementing algorithms. ~~Optimally, we are hoping to make the river polygons part of the triangulation via the CDT implementation and use the hole boundaries for water body
-shore elevation values (which will be used to set the interpolated value inside the holes that arise due to the constraints).~~ This did not work out, instead, we are overlaying the
-input geometries with the raster, estimating polygon elevations by interpolating in the TIN of the pixel centres.
-
-Following some further consultation with Jeroen, we will also double-check how well our primary interpolation method interpolates the building gaps. If they look too triangular,
-we might consider trying to flatten them (like water bodies), or using an alternative secondary interpolation mechanism inside of them.
+Finished all planned tasks of the project. All remaining development concerns the scaling team.
+Only bug fixes and potential small changes to the new hydro-flattening algorithm to be expected.
 
 ## PDAL pipeline entry point (stand-alone ground filtering/pre-processing)
 
@@ -95,8 +88,9 @@ A key to the CMD call signature of `ip_main.py`:
 3. integer to set the post-processing mode, currently these ones are available:
 	* **0** _(default, does not run post-processing)_
 	* **1** _(runs missing pixel value patching only)_
-	* **2** _(runs polygon flattening only)_
-	* **3** _(runs both patching and polygon flattening)_
+	* **2** _(runs basic flattening only)_
+	* **3** _(runs both patching and basic flattening)_
+	* **4** _(runs patching, basic flattening, and the river hydro-flattening algorithms)
 4. pixel size (in metres) for interpolation _(the default value is 1)_
 5. interpolation method, one of:
 	* startin-TINlinear
@@ -183,7 +177,57 @@ I'll explain how it works by giving some more detail about the parameters, listi
 	* If you use k-nearest queries: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.query.html#scipy.spatial.cKDTree.query
 * **Iteration limit:** you may further fine-tune performance by setting a limit on how many times the algorithm may increment the radius/number of neighbours to find. In some cases this may also drastically improve performance at the cost of continuity.
 
-## Future work
+## More about the proper hydro-flattening algorithm
+
+It is based on the workflow I originally outlined in the proposal, which in turn was based on [this GitHub post] (https://github.com/tudelft3d/geo1101-ahn3-admin/issues/2#issuecomment-620467556).
+
+First, the river polygons (in this case the rivers extracted from BBG by Lisa) are skeletonised in Python. Lisa's code does this, it is not yet online
+here as of this readme update (but the end result files are on Stack, so this is not needed for testing).
+As it was not possible to prune the polygons a 100% in Python and we were running out of time, we completed the skeletonisation process by taking the
+shortest path between the starting and ending points of river segments, adding important secondary channels manually. Some further manual fine-tuning
+was done in QGIS, but we do not expect this to have had a great impact on the results.
+
+The code in this repo reads the skeletons and the river polygons as part of the hydro-flattening code, this can be enabled using the appropriate
+post-processing argument (namely, `4`) in the command line call to `ip_main.py`. The vector import is done the usual way, i.e. they are cropped
+to the size of the tile that is being processed.
+
+The following then takes place:
+
+1. Orthogonal lines are cast on the skeleton at its vertices. These are intersected with the skeleton, and with the river boundary (shore lines).
+2. Each cross section is then associated with an elevation based on Laplace-interpolating at the two closest shore intersections and the skeleton intersection.
+3. The cross-sections form a 1D elevation profile, which is iteratively refined in this step to ensure monotonously decreasing elevation values.
+4. The water polygons are then used to create a raster mask via efficient rasterio-based rasterisation. All pixels thus identified as river pixels are re-interpolated.
+5. Re-interpolation takes place. The closest and second-closest cross-section to each river pixel centre is searched for, and the pixel is given a value based on inverse distance weighting using the distances to these two cross sections.
+
+The last step is crucial. It effectively means that we take the river pixel, find which previous and next cross section it falls between, and then
+associate an elevation with it that is somewhere between the elevation of these two cross sections. This guarantees (as far as I can tell) that the
+elevation will always decrease downstream under normal circumstances. For this, we need the cross-sections to also have monotously decreasing
+elevations in the downstream order, which is guaranteed by the third step above.
+
+In theory, this should work perfectly, and it does work quite well where the rivers are relatively straight and the spine vertices are sparse.
+However, dense spine vertices, especially in river bends, will result in intersecting cross-sections, which will trick the interpolation mechanism
+into drawing a reversed flow directly, locally. These are generally small-ish cone-shaped artefacts.
+Furthermore, the intersections at river-channels are tricky, and will trigger lots of artefacts to appear. This is the result of lots of cross-sections
+being present that do not have a consistent orientation and elevation.
+
+On the other hand, the algorithm is robust in the sense that it can handle really weird rivers shapes (such as offshoots, i.e. dock channels and
+hydro-power plants without any issues in most places.
+
+The solution to these issues is quite straightforward. I do not think it is a good idea to further complicate the code, it is complex enough
+as it is. I would be smarter to design the skeletons themselves in such a way that they allow the algorithm to perform better. In particular,
+the placement of spine vertices in river bends should prevent the generation of intersecting cross-sections, and the placement in multi-channel
+river intersections (where the river forks into channels) should be done in a smart way, so that the intersections do not end up criss-crossing one
+another and generating all sorts of weird artefacts.
+
+Another solution would be to modify the program itself to pick points on the spine _itself_ rather than rely on the pre-existing vertices on it.
+This would allow the spine construction to be kept simple, and would allow the algorithm to select the locations of cross-sections that work
+well with the hydro-flattening algorithm.
+
+We recommend this as future work to the client.
+
+## Future work in this repo
+
+_Development has now ended in this repo. Only bug fixes and small changes to be expected._
 
 The current version of this implementation runs as many processes in parallel as there are input files, hence using all processor cores when there are at least as many files as there are cores in
 the given system. This multiprocessing implementation is based on Python built-in multiprocessing pools. A queue-based implementation would probably work better, but this is something for the scaling group to look at. _No final decision yet._

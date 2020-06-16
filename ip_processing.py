@@ -48,7 +48,7 @@ def execute_startin(pts, res, origin, size, method):
             else: ras[yi, xi] = -9999
             xi += 1
         yi += 1
-    return ras
+    return ras, tin
 
 def execute_cgal(pts, res, origin, size):
     """Performs CGAL-NN on the input points.
@@ -336,8 +336,8 @@ def patch(raster, res, origin, size, min_n):
                         if val != -9999: vals += [val]
                 if len(vals) > min_n: raster[yi, xi] = np.median(vals)
 
-def flatten_water(target_folder, raster, res, origin, size):
-    """Reads some pre-determined vector file, tiles them using
+def basic_flattening(target_folder, raster, res, origin, size, tin = False):
+    """Reads some pre-determined vector files, tiles them using
     Lisa's code and "burns" them into the output raster. The flat
     elevation of the polygons is estimated by Laplace-interpolating
     at the locations of the polygon vertices. The underlying TIN
@@ -345,7 +345,6 @@ def flatten_water(target_folder, raster, res, origin, size):
     Rasterisation takes place via rasterio's interface.
     """
     import startin
-    import shapely.geometry as sg
     from rasterio.features import rasterize
     from rasterio.transform import Affine
     transform = (Affine.translation(origin[0], origin[1])
@@ -354,7 +353,6 @@ def flatten_water(target_folder, raster, res, origin, size):
     y0, y1 = origin[1] + size / 2, origin[1] + ((res[1] - 0.5) * size)
     poly_fpaths = [
                      'rest_bodies/bbg_rest_of_the_water.shp',
-                     'river_bodies/bbg_only_river_bodies.shp',
                      'sea_bodies/bbg_sea_and_big_bodies.shp',
                      # You can add more resources here.
                   ]
@@ -370,22 +368,23 @@ def flatten_water(target_folder, raster, res, origin, size):
         vec = wfs_prepare([[x0, x1], [y0, y1]], wfs[0], wfs[1])
         if len(vec) != 0: in_vecs.append(vec)
     if len(in_vecs) == 0: return
-    xs, ys = np.linspace(x0, x1, res[0]), np.linspace(y0, y1, res[1])
-    xg, yg = np.meshgrid(xs, ys)
-    cs = np.vstack((xg.flatten(), yg.flatten(), raster.flatten())).transpose()
-    data = cs[cs[:,2] != -9999]; data_hull = sg.MultiPoint(data).convex_hull
-    tin = startin.DT(); tin.insert(data)
+    if tin is False:
+        xs, ys = np.linspace(x0, x1, res[0]), np.linspace(y0, y1, res[1])
+        xg, yg = np.meshgrid(xs, ys); xg = xg.flatten(); yg = yg.flatten()
+        cs = np.vstack((xg, yg, raster.flatten())).transpose()
+        data = cs[cs[:,2] != -9999]
+        tin = startin.DT(); tin.insert(data)
     elevations = []
     for polys in in_vecs:
         for poly, i in zip(polys, range(len(polys))):
             els = []
             for vx in poly.exterior.coords:
-                if sg.Point(vx).within(data_hull):
-                    els += [tin.interpolate_laplace(vx[0], vx[1])]
+                try: els += [tin.interpolate_laplace(vx[0], vx[1])]
+                except: pass
             for interior in poly.interiors:
                 for vx in interior.coords:
-                    if sg.Point(vx).within(data_hull):
-                        els += [tin.interpolate_laplace(vx[0], vx[1])]
+                    try: els += [tin.interpolate_laplace(vx[0], vx[1])]
+                    except: pass
             elevations.append(np.median(els))
     shapes = []
     for polys in in_vecs:
@@ -394,7 +393,114 @@ def flatten_water(target_folder, raster, res, origin, size):
     for yi in range(res[1]):
         for xi in range(res[0]):
             if raspolys[yi, xi] != -9999: raster[yi, xi] = raspolys[yi, xi]
-    
+    return tin
+            
+def hydro_flattening(target_folder, raster, res, origin, size, tin = False):  
+    """Reads the river polygons and their skeletons, tiles them using
+    Lisa's code and performs hydro-flattening. First cross-sections are
+    cast on the skeletons and their elevations are estimated via
+    Laplace interpolation. The rivers are then burned into the output
+    raster, but each modified pixel is interpolated based on its
+    proximity to the closest two cross-sections.
+    Since the string of cross-selection is optimised to decrease
+    monotonously downstream, under ideal cricumstances this makes the
+    interpolation generate a surface with a consistent slope.
+    Please read the documentation for more details about the
+    algorithm, and its limitations.
+    """
+    import shapely.geometry as sg
+    from rasterio.features import rasterize
+    from rasterio.transform import Affine
+    transform = (Affine.translation(origin[0], origin[1])
+                 * Affine.scale(size, size))
+    x0, x1 = origin[0] + size / 2, origin[0] + ((res[0] - 0.5) * size)
+    y0, y1 = origin[1] + size / 2, origin[1] + ((res[1] - 0.5) * size)
+    river_fpaths = [
+                     'river_bodies/bbg_only_river_bodies.shp',
+                     # You can add more resources here.
+                   ]
+    spine_fpaths = [
+                     'rivers_final/skeletons_final.shp',
+                     # You can add more resources here.
+                   ]
+    in_rivers = []
+    for fpath in river_fpaths:
+        vec = vector_prepare([[x0, x1], [y0, y1]], target_folder + fpath)
+        if len(vec) != 0: in_rivers.append(vec)
+    in_spines = []
+    for fpath in spine_fpaths:
+        vec = vector_prepare([[x0, x1], [y0, y1]], target_folder + fpath)
+        if len(vec) != 0: in_spines.append(vec)
+    if len(in_spines) == 0 or len(in_rivers) == 0:
+        return
+    all_rivers = []
+    for river in in_rivers: all_rivers += river
+    all_rivers = sg.MultiPolygon(all_rivers)
+    cross_sections, elevations, distances = [], [], [0]
+    for lstrings in in_spines:
+        for lstring in lstrings:
+            for i in range(len(lstring.coords[:-1])):
+                s0 = lstring.coords[i]; s1 = lstring.coords[i + 1]
+                ab = sg.LineString([s0, s1])
+                left = ab.parallel_offset(500, 'left')
+                right = ab.parallel_offset(500, 'right')
+                ortho_r = sg.LineString([s0, right.boundary[1]])
+                ortho_l = sg.LineString([s0, left.boundary[0]]) 
+                intersections = [all_rivers.boundary.intersection(ortho_r),
+                                 all_rivers.boundary.intersection(ortho_l)]
+                if type(intersections[0]) == sg.multipoint.MultiPoint:
+                    intersections[0] = intersections[0][0]
+                elif type(intersections[0]) != sg.point.Point: continue
+                if type(intersections[1]) == sg.multipoint.MultiPoint:
+                    intersections[1] = intersections[1][0]
+                elif type(intersections[1]) != sg.point.Point: continue
+                cross_sections.append(sg.LineString([intersections[0],
+                                                     intersections[1]]))
+                i_vals = []
+                try: i_vals.append(tin.interpolate_laplace(s0[0], s0[1]))
+                except: pass
+                try: i_vals.append(tin.interpolate_laplace(intersections[0].x,
+                                                           intersections[0].y))
+                except: pass
+                try: i_vals.append(tin.interpolate_laplace(intersections[1].x,
+                                                           intersections[1].y))
+                except: pass
+                elevations.append(np.mean(i_vals))
+                distances.append(distances[-1] + ab.length)
+    if len(elevations) > 5: elevations[0] = np.mean(elevations[0:3])
+    elevations = np.array(elevations); distances = np.array(distances[:-1])
+    while True:
+        mask = np.full(elevations.shape, False); last_valid = elevations[0]
+        for i in range(len(elevations) - 1):
+            if elevations[i + 1] > last_valid: mask[i + 1] = True
+            else: last_valid = elevations[i + 1]
+        if True not in mask: break
+        elevations[mask] = np.interp(distances[mask], distances[~mask],
+                                     elevations[~mask])
+    el_dict = {}
+    for c_sect, el in zip(cross_sections, elevations):
+        el_dict[c_sect.coords[0]] = el
+    rshape =  [(all_rivers, 0)]
+    raspolys = rasterize(rshape, raster.shape, -9999, transform = transform)
+    for yi in range(res[1]):
+        for xi in range(res[0]):
+            if raspolys[yi, xi] != -9999:
+                centre = sg.Point([origin[0] + (xi + 0.5) * size,
+                                   origin[1] + (yi + 0.5) * size])
+                min_d, closest, next_d, sec_closest = 50000, 0, 50000, 0
+                for cs in cross_sections:
+                    dist = cs.distance(centre)
+                    if dist < min_d:
+                        sec_closest = closest; next_d = min_d
+                        closest = cs.coords[0]; min_d = dist
+                if sec_closest != 0:
+                    ele_closest = el_dict[closest]
+                    ele_sec_closest = el_dict[sec_closest]
+                    u0, w0 = ele_closest, 1 / min_d ** 2
+                    u1, w1 = ele_sec_closest, 1 / next_d ** 2
+                    asum = u0 * w0 + u1 * w1; bsum = w0 + w1
+                    raster[yi, xi] = asum / bsum
+
 def ip_worker(mp):
     """Multiprocessing worker function to be used by the
     p.map function to map objects to, and then start
@@ -430,7 +536,7 @@ def ip_worker(mp):
         origin = [np.mean(extents[0]) - (size / 2) * res[0],
                   np.mean(extents[1]) - (size / 2) * res[1]]
     if method == 'startin-TINlinear' or method == 'startin-Laplace':
-        ras = execute_startin(gnd_coords, res, origin, size, method)
+        ras, tin = execute_startin(gnd_coords, res, origin, size, method)
     elif method == 'CGAL-NN':
         ras = execute_cgal(gnd_coords, res, origin, size)
     elif method == 'CGAL-CDT':
@@ -444,9 +550,15 @@ def ip_worker(mp):
           "Time spent interpolating: {} sec.".format(round(end - start, 2)))
     if postprocess > 0:
         start = time()
-        if postprocess == 2 or postprocess == 3:
-            flatten_water(target_folder, ras, res, origin, size)
-        if postprocess == 1 or postprocess == 3:
+        if postprocess == 2 or postprocess == 3 or postprocess == 4:
+            if method == 'startin-TINlinear' or method == 'startin-Laplace':
+                basic_flattening(target_folder, ras,
+                                 res, origin, size, tin)
+            else: tin = basic_flattening(target_folder, ras,
+                                         res, origin, size)
+        if postprocess == 4:
+            hydro_flattening(target_folder, ras, res, origin, size, tin)
+        if postprocess == 1 or postprocess == 3 or postprocess == 4:
             patch(ras, res, origin, size, 0)
         end = time()
         print("PID {} finished post-processing.".format(os.getpid()),

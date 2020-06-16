@@ -17,8 +17,9 @@
         are available:
           - 0 (default, does not run post-processing)
           - 1 (runs missing pixel value patching only)
-          - 2 (runs polygon flattening only)
-          - 3 (runs both patching and polygon flattening)
+          - 2 (runs basic flattening only)
+          - 3 (runs both patching and basic flattening)
+          - 4 (runs patching, basic flattening and hydro-flattening)
     4:  pixel size (in metres) for interpolation
         [default: 1 metre]
     5:  interpolation method, one of:
