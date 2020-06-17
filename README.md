@@ -31,7 +31,7 @@ It also includes these post-processing modules so far: flattening the areas of p
 
 **NEW STUFF**
 
-* First release of proper hydro-flattening.
+* Second release of proper hydro-flattening. It now produces much nicer results, but is a bit slower.
 * GeoTIFF raster export now uses `float32`.
 * WFS services can also be used as the basis for polygon-based flattening.
 * Fixed some bugs. You can now actually add multiple WFS services, as the layer name is now also configurable.
@@ -184,34 +184,38 @@ It is based on the workflow I originally outlined in the proposal, which in turn
 First, the river polygons (in this case the rivers extracted from BBG by Lisa) are skeletonised in Python. Lisa's code does this, it is not yet online
 here as of this readme update (but the end result files are on Stack, so this is not needed for testing).
 As it was not possible to prune the polygons a 100% in Python and we were running out of time, we completed the skeletonisation process by taking the
-shortest path between the starting and ending points of river segments, adding important secondary channels manually. Some further manual fine-tuning
-was done in QGIS, but we do not expect this to have had a great impact on the results.
+shortest path between the starting and ending points of river segments in QGIS, adding important secondary channels manually. Some further manual
+fine-tuning was done in QGIS, but we do not expect this to have had a great impact on the overall quality of the results.
 
-The code in this repo reads the skeletons and the river polygons as part of the hydro-flattening code, this can be enabled using the appropriate
-post-processing argument (namely, `4`) in the command line call to `ip_main.py`. The vector import is done the usual way, i.e. they are cropped
-to the size of the tile that is being processed.
+The proper hydro-flattening code is part of the post-processing functionalit of the framework that `ip_main.py` provides. It can be enabled by providing
+the appropriate post-processing argument (namely, `4`) in the command line call to `ip_main.py`. The code imports the above skeletons, as well as the
+original collection of river polygons that the skeletons were computed from. The vector import is done the usual way, i.e. they are cropped to the
+size of the tile that is being processed.
 
 The following procedure then takes place:
 
-1. Orthogonal lines are cast on the skeleton at its vertices. These are intersected with the skeleton, and with the river boundary (shore lines).
-2. Each cross section is then associated with an elevation based on Laplace-interpolating at the two closest shore intersections and the skeleton intersection.
-3. The cross-sections form a 1D elevation profile, which is iteratively refined in this step to ensure monotonously decreasing elevation values.
-4. The water polygons are then used to create a raster mask via efficient rasterio-based rasterisation. All pixels thus identified as river pixels are re-interpolated.
-5. Re-interpolation takes place. The closest and second-closest cross-section to each river pixel centre is searched for, and the pixel is given a value based on inverse distance weighting using the distances to these two cross sections.
+1. Lines perpendicular to the skeleton at its vertices are intersected with the river boundary (shore lines), so that each cross-section connects two shoreline points through a skeleton vertex. The shoreline intersections are computed as the closest intersection of the skeleton-perpendicular line with the boundary of the river polygons.
+2. Each cross section is then associated with an elevation based on Laplace-interpolating at the two shoreline points and the respective skeleton vertex.
+3. The cross-section elevations constitute a 1D elevation profile, which is iteratively refined to ensure monotonously decreasing elevation values.
+4. The water polygons are then rasterised to form a mask. All pixels that are masked (identified as river pixels) are re-interpolated in the next step.
+5. The closest and second-closest cross-section to each river pixel centre is searched for, and the pixel is given a value based on inverse distance weighting using the distances to these two cross sections.
 
 The last step is crucial. It effectively means that we take the river pixel, find which previous and next cross section it falls between, and then
 associate an elevation with it that is somewhere between the elevation of these two cross sections. This guarantees (as far as I can tell) that the
 elevation will always decrease downstream under normal circumstances. For this, we need the cross-sections to also have monotously decreasing
-elevations in the downstream order, which is guaranteed by the third step above.
+elevations in the downstream order, which is guaranteed by the third step above. The second release changed the code so that the program not only
+searches for the closest two cross-sections, but also ensures that the interpolation point (the river pixel) indeed falls between these two
+cross-sections. It does this by "casting rays" to the closest point on each cross-section while computing the distance, and checking whether the ray
+intersects any other cross-sections on the way. If it does, the cross-section is excluded from further consideration because the river pixel is
+separated from it by another cross-section and therefore it can be neither the previous, not the next cross-section that the program is looking for.
+Calculating the nearest point on each cross-section that is tested, is an operation with a high computational complexity. I tried using rays
+to the cross-section centroids instead of to their closest points (to speed up the algorithm), but this approach does not work, I am not sure why.
 
 In theory, this should work perfectly, and it does work quite well where the rivers are relatively straight and the spine vertices are sparse.
-However, dense spine vertices, especially in river bends, will result in intersecting cross-sections, which will trick the interpolation mechanism
-into drawing a reversed flow directly, locally. These are generally small-ish cone-shaped artefacts.
+However, dense spine vertices, especially in river bends, may result in intersecting cross-sections, which will trick the interpolation mechanism
+into drawing a small area with locally reversed flow direction. These are generally small-ish cone-shaped artefacts.
 Furthermore, the intersections at river-channels are tricky, and will trigger lots of artefacts to appear. This is the result of lots of cross-sections
-being present that do not have a consistent orientation and elevation.
-
-On the other hand, the algorithm is robust in the sense that it can handle really weird rivers shapes (such as offshoots, i.e. dock channels and
-hydro-power plants without any issues in most places.
+being present that do not have a consistent orientation and elevation, and which might intersect randomly.
 
 The solution to these issues is quite straightforward. I do not think it is a good idea to further complicate the code, it is complex enough
 as it is. I would be smarter to design the skeletons themselves in such a way that they allow the algorithm to perform better. In particular,
@@ -224,6 +228,9 @@ This would allow the spine construction to be kept simple, and would allow the a
 well with the hydro-flattening algorithm.
 
 We recommend this as future work to the client.
+
+On the other hand, the algorithm is robust in the sense that it can handle really weird rivers shapes (such as offshoots, i.e. dock channels and
+hydro-power plants without any issues in most places.
 
 ## Future work in this repo
 

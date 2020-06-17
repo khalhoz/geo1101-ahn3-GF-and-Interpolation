@@ -315,27 +315,6 @@ def write_geotiff(raster, origin, size, fpath):
                            ) as out_file:
             out_file.write(raster.astype(rasterio.float32), 1)
 
-def patch(raster, res, origin, size, min_n):
-    """Patches in missing pixel values by applying a median
-    kernel (3x3) to estimate its value. This is meant to serve
-    as a means of populating missing pixels, not as a means
-    of interpolating large areas. The last parameter should
-    be an integer that specifies the minimum number of valid
-    neighbour values to fill a pixel (0 <= min_n <= 8).
-    """
-    mp = [[-1, -1], [-1, 0], [-1, 1], [0, -1],
-          [0, 1], [1, -1], [1, 0], [1, 1]]
-    for yi in range(res[1]):
-        for xi in range(res[0]):
-            if raster[yi, xi] == -9999:
-                vals = []
-                for m in range(8):
-                    xw, yw = xi + mp[m][0], yi + mp[m][1]
-                    if (xw >= 0 and xw < res[0]) and (yw >= 0 and yw < res[1]):
-                        val = raster[yw, xw]
-                        if val != -9999: vals += [val]
-                if len(vals) > min_n: raster[yi, xi] = np.median(vals)
-
 def basic_flattening(target_folder, raster, res, origin, size, tin = False):
     """Reads some pre-determined vector files, tiles them using
     Lisa's code and "burns" them into the output raster. The flat
@@ -409,6 +388,7 @@ def hydro_flattening(target_folder, raster, res, origin, size, tin = False):
     algorithm, and its limitations.
     """
     import shapely.geometry as sg
+    from shapely.ops import nearest_points
     from rasterio.features import rasterize
     from rasterio.transform import Affine
     transform = (Affine.translation(origin[0], origin[1])
@@ -467,7 +447,7 @@ def hydro_flattening(target_folder, raster, res, origin, size, tin = False):
                 except: pass
                 elevations.append(np.mean(i_vals))
                 distances.append(distances[-1] + ab.length)
-    if len(elevations) > 5: elevations[0] = np.mean(elevations[0:3])
+    if len(elevations) > 5: elevations[0] = max(elevations[0:5])
     elevations = np.array(elevations); distances = np.array(distances[:-1])
     while True:
         mask = np.full(elevations.shape, False); last_valid = elevations[0]
@@ -477,29 +457,53 @@ def hydro_flattening(target_folder, raster, res, origin, size, tin = False):
         if True not in mask: break
         elevations[mask] = np.interp(distances[mask], distances[~mask],
                                      elevations[~mask])
+    print(elevations)
     el_dict = {}
     for c_sect, el in zip(cross_sections, elevations):
         el_dict[c_sect.coords[0]] = el
     rshape =  [(all_rivers, 0)]
     raspolys = rasterize(rshape, raster.shape, -9999, transform = transform)
+    all_css = sg.MultiLineString(cross_sections)
     for yi in range(res[1]):
         for xi in range(res[0]):
             if raspolys[yi, xi] != -9999:
                 centre = sg.Point([origin[0] + (xi + 0.5) * size,
                                    origin[1] + (yi + 0.5) * size])
-                min_d, closest, next_d, sec_closest = 50000, 0, 50000, 0
+                dist_log = []
                 for cs in cross_sections:
-                    dist = cs.distance(centre)
-                    if dist < min_d:
-                        sec_closest = closest; next_d = min_d
-                        closest = cs.coords[0]; min_d = dist
-                if sec_closest != 0:
-                    ele_closest = el_dict[closest]
-                    ele_sec_closest = el_dict[sec_closest]
-                    u0, w0 = ele_closest, 1 / min_d ** 2
-                    u1, w1 = ele_sec_closest, 1 / next_d ** 2
+                    ray = sg.LineString(nearest_points(centre, cs))
+                    if not ray.crosses(all_css):
+                        dist_log.append((ray.length, el_dict[cs.coords[0]]))
+                if len(dist_log) >= 2:
+                    dist_log.sort()
+                    dist0 = dist_log[0][0]; dist1 = dist_log[1][0]
+                    ele0 = dist_log[0][1]; ele1 = dist_log[1][1]
+                    u0, w0 = ele0, 1 / dist0 ** 2
+                    u1, w1 = ele1, 1 / dist1 ** 2
                     asum = u0 * w0 + u1 * w1; bsum = w0 + w1
                     raster[yi, xi] = asum / bsum
+                else: raster[yi, xi] = -9999
+
+def patch(raster, res, origin, size, min_n):
+    """Patches in missing pixel values by applying a median
+    kernel (3x3) to estimate its value. This is meant to serve
+    as a means of populating missing pixels, not as a means
+    of interpolating large areas. The last parameter should
+    be an integer that specifies the minimum number of valid
+    neighbour values to fill a pixel (0 <= min_n <= 8).
+    """
+    mp = [[-1, -1], [-1, 0], [-1, 1], [0, -1],
+          [0, 1], [1, -1], [1, 0], [1, 1]]
+    for yi in range(res[1]):
+        for xi in range(res[0]):
+            if raster[yi, xi] == -9999:
+                vals = []
+                for m in range(8):
+                    xw, yw = xi + mp[m][0], yi + mp[m][1]
+                    if (xw >= 0 and xw < res[0]) and (yw >= 0 and yw < res[1]):
+                        val = raster[yw, xw]
+                        if val != -9999: vals += [val]
+                if len(vals) > min_n: raster[yi, xi] = np.median(vals)
 
 def ip_worker(mp):
     """Multiprocessing worker function to be used by the
