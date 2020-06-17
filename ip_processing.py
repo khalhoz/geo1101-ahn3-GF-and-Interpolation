@@ -457,7 +457,6 @@ def hydro_flattening(target_folder, raster, res, origin, size, tin = False):
         if True not in mask: break
         elevations[mask] = np.interp(distances[mask], distances[~mask],
                                      elevations[~mask])
-    print(elevations)
     el_dict = {}
     for c_sect, el in zip(cross_sections, elevations):
         el_dict[c_sect.coords[0]] = el
