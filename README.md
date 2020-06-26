@@ -1,8 +1,8 @@
-# Ground Filtering, Interpolation, Hole Filling and Hydro-flattening Testing Environment
+# Ground Filtering, Interpolation, Hole Filling and Hydro-flattening Methods and Testing Environment
 
 **This is the Python repo of the ground filtering/interpolation team of the AHN3 GEO1101 (synthesis project) group of 2020.**
 
-## In repo so far:
+## In repo:
 
 * `Classification_F1_score` folder _(Khaled & Manos's quantitative ground filtering evaluation)_
 * `Vertical_difference` folder _(Khaled & Manos's working folder for quantitative interpolation evaluation)_
@@ -11,14 +11,12 @@
 	* `config_default.json` _(default ground filtering configuration file which should not be modified)_
 	* `config_preprocess.json` _(Khaled & Manos's final pipeline - only pre-processes, does not ground-filter)_
 	* `fnames.txt` _(list of input files names for the ground filtering program)_
-* `Ground filtering.docx` _(Manos's draft report on the ground filtering results)_
 * `README.md` _(this readme file)_
 * `gdal_attempt.py` _(a half-baked test program for direct interpolation via GDAL)_
 * `gf_main.py` _(main file for ground filtering)_
 * `gf_processing.py` _(ground filtering code)_
 * `ip_main.py` _(main file for interpolation)_
 * `ip_processing.py` _(interpolation code)_
-* `ip_st_test` _(some raster tile statistics generation code from Khaled)_
 * `las_prepare.py` _(reads LAS file and establishes raster dimensions, part of main program)_
 * `Make_tile_vectors.py` _(Lisa's vector tiling program)_
 * `split_bbg_into_subfiles.py` _(Lisa's code for splitting the [BGG](https://www.pdok.nl/introductie/-/article/cbs-bestand-bodemgebruik) into subsets of river, sea, and other water body polygons)_
